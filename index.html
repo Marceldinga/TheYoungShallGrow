@@ -15,7 +15,6 @@
       --shadow: 0 14px 40px rgba(0,0,0,.35);
       --radius:14px;
     }
-
     *{ box-sizing:border-box; }
     body{
       margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
@@ -24,15 +23,9 @@
                   var(--bg);
       color:var(--text);
     }
-
     .wrap{ max-width:1200px; margin:0 auto; padding:22px; }
-    .topbar{
-      display:flex; align-items:center; justify-content:space-between; gap:12px;
-      margin-bottom:16px;
-    }
-    .brand{
-      display:flex; flex-direction:column; gap:2px;
-    }
+    .topbar{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+    .brand{ display:flex; flex-direction:column; gap:2px; }
     .brand h1{ margin:0; font-size:20px; letter-spacing:-.02em; }
     .brand p{ margin:0; color:var(--muted); font-size:13px; }
 
@@ -53,20 +46,10 @@
       margin-bottom:14px;
     }
 
-    .grid{
-      display:grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap:12px;
-    }
+    .grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:12px; }
     .col-12{ grid-column: span 12; }
-    .col-8{ grid-column: span 8; }
     .col-6{ grid-column: span 6; }
-    .col-4{ grid-column: span 4; }
-    .col-3{ grid-column: span 3; }
-
-    @media (max-width: 980px){
-      .col-8,.col-6,.col-4,.col-3{ grid-column: span 12; }
-    }
+    @media (max-width: 980px){ .col-6{ grid-column: span 12; } }
 
     h2{ margin:0 0 10px; font-size:16px; color:var(--green); }
     h3{ margin:14px 0 8px; font-size:14px; color:#cfe7ff; font-weight:600; }
@@ -152,7 +135,6 @@
 
     .muted{ color: var(--muted); font-size:13px; }
 
-    /* Tables */
     .tableGrid{
       display:grid;
       grid-template-columns: repeat(12, 1fr);
@@ -237,10 +219,16 @@
       <h2>Overview</h2>
       <div class="kpis">
         <div class="kpi"><div class="label">Pot Amount</div><div class="value" id="potAmount">--</div></div>
+        <div class="kpi"><div class="label">Pending Foundation Payments</div><div class="value" id="pendingFoundation">--</div></div>
         <div class="kpi"><div class="label">My Total Value</div><div class="value" id="myValue">--</div></div>
         <div class="kpi"><div class="label">My Member ID</div><div class="value" id="myMemberId">--</div></div>
+
+        <div class="kpi"><div class="label">Total Loans</div><div class="value" id="totalLoans">--</div></div>
+        <div class="kpi"><div class="label">Total Interest Generated</div><div class="value" id="totalInterest">--</div></div>
+        <div class="kpi"><div class="label">Beneficiary Date (Bi-Weekly)</div><div class="value" id="beneficiaryDate">--</div></div>
         <div class="kpi"><div class="label">Role</div><div class="value" id="myRole">--</div></div>
       </div>
+
       <div style="margin-top:10px" class="muted">
         Tip: Click <b>Tables</b> to view all records your RLS allows. Admin can also insert using the Admin tab.
       </div>
@@ -294,12 +282,17 @@
       </div>
       <button onclick="addFine()">Add Fine</button>
 
-      <h3>Add Foundation Payment</h3>
+      <h3>Add Foundation Payment (Pending)</h3>
       <div class="row">
         <input id="fp_member" placeholder="Member ID (bigint)">
-        <input id="fp_amount" type="number" placeholder="Amount">
+        <input id="fp_paid" type="number" placeholder="Amount Paid (optional)" value="0">
+        <input id="fp_pending" type="number" placeholder="Amount Pending">
+        <select id="fp_status">
+          <option value="pending" selected>pending</option>
+          <option value="paid">paid</option>
+        </select>
       </div>
-      <button onclick="addFoundation()">Add Foundation Payment</button>
+      <button onclick="addFoundationPending()">Add Foundation Payment</button>
 
       <h3>Add Repayment</h3>
       <div class="row">
@@ -365,7 +358,7 @@
   // CONFIG
   // =============================
   const SUPABASE_URL = "https://ficlrtvrrzfiakmciwel.supabase.co";
-  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI"; // <-- keep your real key here
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   let sessionUser = null;
@@ -378,24 +371,38 @@
     statusDot.classList.toggle("ok", !!ok);
     statusText.textContent = text;
   }
-
   function show(id, yes=true){
     document.getElementById(id).classList.toggle("hide", !yes);
   }
-
   function switchTab(name){
-    // tabs
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     document.querySelector(`.tab[data-tab="${name}"]`)?.classList.add("active");
-
-    // sections
     ["overview","member","admin","tables"].forEach(t => show("tab_"+t, t===name));
   }
-
   async function callRPC(name, payload={}){
     const { data, error } = await sb.rpc(name, payload);
-    if(error){ alert(error.message); throw error; }
+    if(error){ throw error; }
     return data;
+  }
+
+  function fmtMoney(v){
+    if(v === null || v === undefined || v === "") return "--";
+    const n = Number(v);
+    if(Number.isNaN(n)) return String(v);
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+
+  function fmtDateISO(d){
+    if(!d) return "--";
+    const dt = new Date(d);
+    if(Number.isNaN(dt.getTime())) return String(d);
+    return dt.toISOString().slice(0,10);
+  }
+
+  function addDays(dateObj, days){
+    const d = new Date(dateObj);
+    d.setDate(d.getDate() + days);
+    return d;
   }
 
   // =============================
@@ -417,14 +424,10 @@
     sessionUser = data.user;
     setStatus(true, "Logged in: " + sessionUser.email);
 
-    // Show tabs + default view
     show("appTabs", true);
     switchTab("overview");
 
-    // Determine admin role
     await detectAdmin();
-
-    // Load stats + tables
     await loadOverview();
     await refreshTables();
   }
@@ -440,7 +443,6 @@
   }
 
   async function detectAdmin(){
-    // Uses your existing function: is_admin()
     try{
       const v = await callRPC("is_admin");
       isAdmin = (v === true) || (v === "true") || (v?.is_admin === true);
@@ -449,34 +451,106 @@
     }
     myRole.textContent = isAdmin ? "admin" : "member";
     adminTabBtn.style.display = isAdmin ? "inline-flex" : "none";
-    // If not admin and user clicked admin, fallback
-    if(!isAdmin){
-      show("tab_admin", false);
-    }
+    if(!isAdmin) show("tab_admin", false);
   }
 
   // =============================
-  // OVERVIEW (read-only)
+  // OVERVIEW (read-only KPIs)
   // =============================
   async function loadOverview(){
-  try{
-    const pot = await callRPC("current_pot_amount");
-    const myId = await callRPC("current_member_id");
+    try{
+      // 1) Pot + member id + my value from your RPCs
+      let pot = null, myId = null, myVal = null;
 
-    const myVal = await callRPC("member_total_value", {
-      p_member_id: myId
-    });
+      try{ pot = await callRPC("current_pot_amount"); }catch(e){}
+      try{ myId = await callRPC("current_member_id"); }catch(e){}
+      try{
+        if(myId !== null && myId !== undefined){
+          myVal = await callRPC("member_total_value", { p_member_id: Number(myId) });
+        }
+      }catch(e){}
 
-    potAmount.textContent = (pot ?? "--");
-    myValue.textContent = (myVal ?? "--");
-    myMemberId.textContent = (myId ?? "--");
+      potAmount.textContent = fmtMoney(pot);
+      myMemberId.textContent = (myId ?? "--");
+      myValue.textContent = fmtMoney(myVal);
 
-    if(myId && !loan_borrower.value) loan_borrower.value = myId;
-  }catch(e){
-    // keep UI alive
+      if(myId && !loan_borrower.value) loan_borrower.value = myId;
+
+      // 2) Pending Foundation Payments (sum of amount_pending where status='pending')
+      //    Use RPC if you have it; otherwise compute from table
+      let pendingTotal = null;
+      try{
+        pendingTotal = await callRPC("total_pending_foundation_amount");
+      }catch(e){
+        const q = await sb
+          .from("foundation_payments")
+          .select("amount_pending,status")
+          .limit(1000); // if you have many rows, we can switch to RPC later
+
+        if(!q.error && q.data){
+          pendingTotal = q.data
+            .filter(r => String(r.status || "").toLowerCase() === "pending")
+            .reduce((s,r) => s + Number(r.amount_pending || 0), 0);
+        }
+      }
+      pendingFoundation.textContent = fmtMoney(pendingTotal);
+
+      // 3) Total Loans + Total Interest (use RPCs if present, else fallback)
+      let loansTotal = null;
+      try{
+        loansTotal = await callRPC("total_loans_amount");
+      }catch(e){
+        const q = await sb.from("loans").select("*").limit(1000);
+        if(!q.error && q.data){
+          // Try common columns: principal, amount, total_amount, balance
+          loansTotal = q.data.reduce((s,r) => {
+            const v = r.total_amount ?? r.principal ?? r.amount ?? r.balance ?? 0;
+            return s + Number(v || 0);
+          }, 0);
+        }
+      }
+      totalLoans.textContent = fmtMoney(loansTotal);
+
+      let interestTotal = null;
+      try{
+        interestTotal = await callRPC("total_interest_generated");
+      }catch(e){
+        // Fallback: if you track interest in a table, add it here later.
+        // We'll try to sum loans.interest_total / interest_generated if it exists.
+        const q = await sb.from("loans").select("*").limit(1000);
+        if(!q.error && q.data){
+          interestTotal = q.data.reduce((s,r) => {
+            const v = r.total_interest ?? r.interest_total ?? r.interest_generated ?? r.interest ?? 0;
+            return s + Number(v || 0);
+          }, 0);
+        }
+      }
+      totalInterest.textContent = fmtMoney(interestTotal);
+
+      // 4) Beneficiary date (bi-weekly)
+      //    Best: RPC last_beneficiary_date. Fallback: read payouts table.
+      let lastBen = null;
+      try{
+        lastBen = await callRPC("last_beneficiary_date");
+      }catch(e){
+        const q = await sb.from("payouts").select("*").order("created_at", {ascending:false}).limit(1);
+        if(!q.error && q.data && q.data[0]){
+          lastBen = q.data[0].payout_date ?? q.data[0].created_at ?? null;
+        }
+      }
+
+      if(lastBen){
+        const lastDate = new Date(lastBen);
+        const nextDate = addDays(lastDate, 14); // bi-weekly = 14 days
+        beneficiaryDate.textContent = `${fmtDateISO(lastDate)} → ${fmtDateISO(nextDate)}`;
+      }else{
+        beneficiaryDate.textContent = "--";
+      }
+
+    }catch(e){
+      // keep UI alive
+    }
   }
-}
-
 
   // =============================
   // ADMIN INSERTS
@@ -493,7 +567,7 @@
   async function addContribution(){
     if(!isAdmin){ alert("Admin only"); return; }
     await callRPC("add_contribution", {
-      p_member_id: BigInt(c_member.value),
+      p_member_id: Number(c_member.value),
       p_amount: Number(c_amount.value)
     });
     alert("Contribution added");
@@ -504,7 +578,7 @@
   async function addFine(){
     if(!isAdmin){ alert("Admin only"); return; }
     await callRPC("add_fine", {
-      p_member_id: BigInt(f_member.value),
+      p_member_id: Number(f_member.value),
       p_amount: Number(f_amount.value),
       p_reason: (f_reason.value || "").trim()
     });
@@ -513,49 +587,51 @@
     await refreshTables();
   }
 
-  async function addFoundation(){
+  // ✅ NEW: Insert pending foundation payment directly into foundation_payments table
+  async function addFoundationPending(){
     if(!isAdmin){ alert("Admin only"); return; }
 
-    // IMPORTANT:
-    // You do NOT have a function named "add_foundation_payment" in your list.
-    // The only relevant function you showed is: repayments_update_foundation(p_member_id bigint)
-    // So we call it, passing member_id only. If yours also needs amount, update the RPC signature accordingly.
-    //
-    // If you actually have a different function for foundation payments, replace the name here.
-    try{
-      await callRPC("repayments_update_foundation", {
-        p_member_id: BigInt(fp_member.value)
-      });
-      alert("Foundation update executed");
-    }catch(e){
-      alert("Your function repayments_update_foundation may not accept amount. Check its arguments in Supabase.");
+    const memberId = Number(fp_member.value);
+    const paid = Number(fp_paid.value || 0);
+    const pending = Number(fp_pending.value || 0);
+    const status = (fp_status.value || "pending").trim().toLowerCase();
+
+    if(!memberId || Number.isNaN(memberId)){ alert("Enter Member ID"); return; }
+    if(Number.isNaN(paid) || paid < 0){ alert("Paid amount invalid"); return; }
+    if(Number.isNaN(pending) || pending < 0){ alert("Pending amount invalid"); return; }
+    if(paid === 0 && pending === 0){ alert("Enter paid or pending amount"); return; }
+
+    // Your table shown: amount_paid, amount_pending, status (and member_id)
+    const row = {
+      member_id: memberId,
+      amount_paid: paid,
+      amount_pending: pending,
+      status: status
+    };
+
+    const { error } = await sb.from("foundation_payments").insert([row]);
+    if(error){
+      alert("Insert failed (RLS or columns mismatch): " + error.message);
+      return;
     }
 
+    alert("Foundation payment added (" + status + ")");
     await loadOverview();
     await refreshTables();
   }
 
   async function addRepayment(){
     if(!isAdmin){ alert("Admin only"); return; }
-
-    // You have: pay_interest(p_loan_id uuid, p_amount numeric)
-    // For repayments, you did not show a dedicated add_repayment RPC.
-    // If your repayment insert is direct table insert allowed by RLS, we can insert into repayments.
-    // We'll try table insert first.
-    const memberId = r_member.value.trim();
+    const memberId = Number(r_member.value);
     const amount = Number(r_amount.value);
-
-    // Try inserting to repayments table (if RLS allows admin insert)
     const { error } = await sb.from("repayments").insert([{
-      member_id: memberId ? BigInt(memberId) : null,
+      member_id: memberId,
       amount: amount
     }]);
-
     if(error){
       alert("Repayment insert failed (RLS or missing columns). Error: " + error.message);
       return;
     }
-
     alert("Repayment added");
     await loadOverview();
     await refreshTables();
@@ -582,8 +658,8 @@
   // =============================
   async function requestLoan(){
     await callRPC("borrow_eligibility", {
-      p_borrower_id: BigInt(loan_borrower.value),
-      p_surety_id: BigInt(loan_surety.value),
+      p_borrower_id: Number(loan_borrower.value),
+      p_surety_id: Number(loan_surety.value),
       p_amount: Number(loan_amount.value)
     });
     alert("Loan request sent (eligibility checked by Supabase)");
@@ -617,7 +693,6 @@
   }
 
   async function refreshTables(){
-    // Fetch small slices so UI stays fast
     const q1 = await sb.from("members").select("*").order("id", { ascending: false }).limit(60);
     const q2 = await sb.from("contributions").select("*").order("id", { ascending: false }).limit(60);
     const q3 = await sb.from("fines").select("*").order("id", { ascending: false }).limit(60);
