@@ -12,9 +12,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <style>
-    /* ===========================
-       BUSINESS THEME (PRO UI)
-    =========================== */
     :root{
       --primary:#1f4b99;
       --primary2:#2a6adf;
@@ -51,13 +48,8 @@
       min-height:100vh;
     }
 
-    /* ===========================
-       LOGIN
-    =========================== */
-    #locked{
-      display:flex;align-items:center;justify-content:center;
-      min-height:100vh;padding:22px;
-    }
+    /* LOGIN */
+    #locked{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:22px}
     .lockBox{
       width:min(520px,100%);
       background:var(--card);
@@ -66,14 +58,8 @@
       padding:18px;
       box-shadow:var(--shadow);
     }
-    .lockTop{
-      display:flex;align-items:center;justify-content:space-between;
-      gap:12px;margin-bottom:10px;
-    }
-    .brandMini{
-      display:flex;align-items:center;gap:10px;
-      font-weight:900; letter-spacing:.2px;
-    }
+    .lockTop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+    .brandMini{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.2px}
     .dot{
       width:10px;height:10px;border-radius:999px;
       background:linear-gradient(135deg, var(--primary2), var(--accent));
@@ -90,7 +76,7 @@
       margin-bottom:10px;
     }
 
-    input,select,textarea{
+    input{
       width:100%;
       padding:12px 12px;
       border-radius:14px;
@@ -100,129 +86,84 @@
       outline:none;
       transition: box-shadow .12s ease, border-color .12s ease, transform .08s ease;
     }
-    input::placeholder,textarea::placeholder{color:#94a3b8}
-    textarea{min-height:96px;resize:vertical}
-
-    input:focus,select:focus,textarea:focus{
+    input::placeholder{color:#94a3b8}
+    input:focus{
       border-color: rgba(42,106,223,.45);
       box-shadow: var(--ring);
       background:var(--card2);
     }
 
     .btn{
-      padding:11px 14px;
-      border-radius:14px;
+      padding:11px 14px;border-radius:14px;
       border:1px solid rgba(31,75,153,.35);
       background: linear-gradient(135deg, rgba(42,106,223,.20), rgba(20,184,166,.12));
-      color:var(--text);
-      cursor:pointer;
+      color:var(--text);cursor:pointer;
       box-shadow:var(--shadow2);
       transition: transform .08s ease, filter .10s ease, box-shadow .12s ease;
       font-weight:700;
     }
     .btn:hover{filter:brightness(1.03)}
     .btn:active{transform: translateY(1px)}
-    .btn.ghost{
-      background:var(--card2);
-      box-shadow:none;
-      border-color: var(--border);
-      font-weight:700;
-    }
+    .btn.ghost{background:var(--card2);box-shadow:none;border-color: var(--border);font-weight:700}
     .btn.primary{
       background: linear-gradient(135deg, rgba(31,75,153,.98), rgba(42,106,223,.95));
-      color:#fff;
-      border-color: rgba(31,75,153,.30);
+      color:#fff;border-color: rgba(31,75,153,.30);
     }
     .btn:disabled{opacity:.55;cursor:not-allowed;filter:grayscale(20%);box-shadow:none}
 
     .lockGrid{display:grid;grid-template-columns:1fr;gap:10px}
     .err{
-      color:#fecaca;
-      background:rgba(239,68,68,.10);
+      color:#fecaca;background:rgba(239,68,68,.10);
       border:1px solid rgba(239,68,68,.25);
       padding:10px 12px;border-radius:14px;
-      white-space:pre-wrap;font-size:12px;
-      display:none;
+      white-space:pre-wrap;font-size:12px;display:none;
     }
 
-    /* ===========================
-       APP LAYOUT
-    =========================== */
+    /* APP */
     .wrap{display:flex;min-height:100vh}
     .sidebar{
-      width:330px;
-      padding:16px;
-      border-right:1px solid var(--border);
-      background:rgba(21,28,47,.92);
-      backdrop-filter: blur(10px);
+      width:330px;padding:16px;border-right:1px solid var(--border);
+      background:rgba(21,28,47,.92);backdrop-filter: blur(10px);
     }
     .main{flex:1;padding:18px}
-
-    .brand{
-      font-weight:900;
-      font-size:16px;
-      letter-spacing:.2px;
-      display:flex;align-items:center;gap:10px;
-    }
+    .brand{font-weight:900;font-size:16px;letter-spacing:.2px;display:flex;align-items:center;gap:10px}
     .sub{color:var(--muted);font-size:12px;margin-top:6px;line-height:1.4}
     .card{
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      padding:14px;
-      margin-top:14px;
+      background:var(--card);border:1px solid var(--border);
+      border-radius:var(--radius);padding:14px;margin-top:14px;
       box-shadow:var(--shadow2);
     }
     .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
     .pill{
       display:inline-flex;align-items:center;gap:8px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      background:rgba(31,75,153,.10);
-      font-size:12px;
-      color:var(--text);
-      white-space:nowrap;
+      padding:6px 10px;border-radius:999px;border:1px solid var(--border);
+      background:rgba(31,75,153,.10);font-size:12px;color:var(--text);white-space:nowrap;
     }
     .pill b{font-weight:900}
 
     .nav{display:flex;flex-direction:column;gap:8px;margin-top:14px}
     .nav button{
-      width:100%;
-      text-align:left;
-      padding:11px 12px;
-      border-radius:14px;
-      border:1px solid var(--border);
-      background:var(--card2);
-      color:var(--text);
-      cursor:pointer;
-      transition: box-shadow .12s ease, transform .06s ease, border-color .12s ease;
+      width:100%;text-align:left;padding:11px 12px;border-radius:14px;
+      border:1px solid var(--border);background:var(--card2);color:var(--text);
+      cursor:pointer;transition: box-shadow .12s ease, transform .06s ease, border-color .12s ease;
       font-weight:800;
     }
-    .nav button:hover{
-      border-color: rgba(42,106,223,.35);
-      box-shadow: 0 8px 18px rgba(0,0,0,.22);
-    }
+    .nav button:hover{border-color: rgba(42,106,223,.35);box-shadow: 0 8px 18px rgba(0,0,0,.22)}
     .nav button.active{
       border-color: rgba(42,106,223,.55);
       box-shadow: 0 0 0 3px rgba(42,106,223,.18) inset;
       background: rgba(42,106,223,.14);
-      color: var(--text);
     }
 
-    .topbar{
-      display:flex;justify-content:space-between;align-items:flex-start;
-      gap:12px;margin-bottom:14px
-    }
+    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
     .titleWrap{display:flex;flex-direction:column;gap:4px}
     .title{font-size:18px;font-weight:900}
     .subtitleSmall{font-size:12px;color:var(--muted)}
     .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .kpi{position:relative;overflow:hidden;}
+    .kpi{position:relative;overflow:hidden}
     .kpi:before{
-      content:"";
-      position:absolute; inset:0;
+      content:"";position:absolute; inset:0;
       background: linear-gradient(135deg, rgba(42,106,223,.10), rgba(20,184,166,.08));
       pointer-events:none;
     }
@@ -232,62 +173,36 @@
     .section{display:none}
     .section.active{display:block}
 
-    /* ===========================
-       TABLES
-    =========================== */
     .tableWrap{overflow:auto;border-radius:14px;border:1px solid var(--border);margin-top:10px}
     table{width:100%;border-collapse:separate;border-spacing:0;min-width:720px;background:var(--card)}
     th,td{
-      padding:10px 10px;
-      border-bottom:1px solid var(--border);
-      text-align:left;
-      font-size:12px;
-      vertical-align:top;
+      padding:10px 10px;border-bottom:1px solid var(--border);
+      text-align:left;font-size:12px;vertical-align:top;
     }
-    th{
-      color:var(--muted);
-      font-weight:900;
-      background:#1f2937;
-      position:sticky; top:0; z-index:1;
-    }
+    th{color:var(--muted);font-weight:900;background:#1f2937;position:sticky; top:0; z-index:1}
     tbody tr:nth-child(even) td{background:#19213a}
     tbody tr:hover td{background:rgba(42,106,223,.12)}
-    .tdMoney{text-align:right;font-variant-numeric: tabular-nums;}
+    .tdMoney{text-align:right;font-variant-numeric: tabular-nums}
     .tdCenter{text-align:center}
 
     .badge{
       display:inline-flex;align-items:center;gap:6px;
-      padding:5px 10px;border-radius:999px;
-      font-size:11px;font-weight:900;
-      border:1px solid transparent;
-      white-space:nowrap;
+      padding:5px 10px;border-radius:999px;font-size:11px;font-weight:900;
+      border:1px solid transparent;white-space:nowrap;
     }
-    .badge::before{
-      content:"";
-      width:8px;height:8px;border-radius:999px;
-      background: currentColor;
-      opacity:.95;
-      box-shadow:0 0 0 3px rgba(0,0,0,.12);
-    }
+    .badge::before{content:"";width:8px;height:8px;border-radius:999px;background: currentColor;opacity:.95;box-shadow:0 0 0 3px rgba(0,0,0,.12)}
     .b-pending{color:#f59e0b;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.25)}
     .b-active{color:#60a5fa;background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.25)}
     .b-cleared{color:#34d399;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.25)}
     .b-paid{color:#34d399;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.25)}
     .b-unpaid{color:#f87171;background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.25)}
-    .b-partial{color:#2dd4bf;background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.22)}
     .b-unknown{color:#cbd5e1;background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.22)}
 
     #toast{
       position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
-      background:rgba(15,23,42,.92);
-      color:#fff;
-      padding:10px 14px;
-      border-radius:14px;
-      box-shadow:var(--shadow);
-      display:none;
-      z-index:9999;
-      max-width:min(560px,92vw);
-      font-size:13px;
+      background:rgba(15,23,42,.92);color:#fff;
+      padding:10px 14px;border-radius:14px;box-shadow:var(--shadow);
+      display:none;z-index:9999;max-width:min(560px,92vw);font-size:13px;
     }
 
     @media (max-width:1100px){
@@ -408,12 +323,12 @@
         <div class="card">
           <div style="font-weight:900;margin-bottom:8px">Contributions by Member</div>
           <canvas id="chartHist" height="140"></canvas>
-          <div class="sub" style="margin-top:8px">If you see “No data”, it means RLS is blocking or the table is empty.</div>
+          <div class="sub" style="margin-top:8px">If you see “No data”, table is empty or RLS is blocking.</div>
         </div>
         <div class="card">
           <div style="font-weight:900;margin-bottom:8px">Loans Status</div>
           <canvas id="chartPie" height="140"></canvas>
-          <div class="sub" style="margin-top:8px">This is a simple summary chart.</div>
+          <div class="sub" style="margin-top:8px">Simple summary chart.</div>
         </div>
       </div>
     </section>
@@ -451,7 +366,7 @@
         <div style="font-weight:900">Loans</div>
         <div class="tableWrap">
           <table>
-            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Principal</th><th class="tdMoney">Total</th><th class="tdCenter">Status</th></tr></thead>
+            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Principal</th><th class="tdMoney">Total Due</th><th class="tdCenter">Status</th></tr></thead>
             <tbody id="tbLoans"></tbody>
           </table>
         </div>
@@ -527,18 +442,9 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 /* ===========================
-   CONSTANTS
-=========================== */
-const ROTATION_START = new Date("2026-01-03T00:00:00");
-const FOUNDATION_FACTOR = 0.70;
-const FOUNDATION_PENDING_MAX_DAYS = 15;
-const INTEREST_RATE = 0.05;
-const INTEREST_CYCLE_DAYS = 26;
-
-/* ===========================
    STATE
 =========================== */
-let appState = { foundation:0, total_interest_generated:0, next_payout_index:0, next_payout_date:"2026-01-03", rotation_start_date:"2026-01-03" };
+let appState = { total_interest_generated: 0, next_payout_index: 0, next_payout_date: null };
 let members = [];
 let contributions = [];
 let payouts = [];
@@ -605,7 +511,6 @@ function setActiveNav(id){
   const btn = document.getElementById(id);
   if(btn) btn.classList.add("active");
 }
-
 function show(sectionKey, title){
   document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
   const sec = document.getElementById(`sec-${sectionKey}`);
@@ -613,9 +518,22 @@ function show(sectionKey, title){
   document.getElementById("pageTitle").textContent = title || "Dashboard";
 }
 
-/* ===========================
-   AUTH MODE UI
-=========================== */
+function safeDate(x){
+  if(!x) return "—";
+  const s = String(x);
+  return s.length >= 10 ? s.slice(0,10) : s;
+}
+
+function badgeStatus(status){
+  const s = String(status || "").toLowerCase();
+  if(s.includes("pending")) return `<span class="badge b-pending">Pending</span>`;
+  if(s.includes("active")) return `<span class="badge b-active">Active</span>`;
+  if(s.includes("cleared")) return `<span class="badge b-cleared">Cleared</span>`;
+  if(s.includes("paid")) return `<span class="badge b-paid">Paid</span>`;
+  if(s.includes("unpaid")) return `<span class="badge b-unpaid">Unpaid</span>`;
+  return `<span class="badge b-unknown">${status || "—"}</span>`;
+}
+
 function applyAuthModeUI(){
   const su = document.getElementById("signupFields");
   const btn = document.getElementById("btnAuth");
@@ -659,14 +577,11 @@ async function enforceAdminGate(){
     return false;
   }
 
-  // profile lookup
   const { data: profile, error } = await sb
     .from("profiles")
     .select("role, approved, member_id")
     .eq("id", user.id)
     .maybeSingle();
-
-  console.log("PROFILE RESULT:", { profile, error });
 
   if(error){
     sideErr("profiles blocked (RLS): " + error.message);
@@ -678,7 +593,6 @@ async function enforceAdminGate(){
   }
 
   if(!profile){
-    sideErr("profiles: no row for this user. Create a profiles row.");
     await sb.auth.signOut();
     document.getElementById("app").style.display = "none";
     document.getElementById("locked").style.display = "flex";
@@ -698,7 +612,6 @@ async function enforceAdminGate(){
     return false;
   }
 
-  // Show app
   document.getElementById("locked").style.display = "none";
   document.getElementById("app").style.display = "flex";
 
@@ -706,14 +619,14 @@ async function enforceAdminGate(){
   document.getElementById("role").textContent = profile.role || "member";
   document.getElementById("today").textContent = new Date().toLocaleDateString();
 
-  // If member, disable Members nav (optional UI)
+  // hide Members nav for non-admin
   document.getElementById("navMembers").style.display = window.isAdmin ? "block" : "none";
 
   return true;
 }
 
 /* ===========================
-   AUTH
+   AUTH (FIXED: no more stuck “Please wait…”)
 =========================== */
 async function signIn(){
   lockErr(""); sideErr("");
@@ -726,17 +639,24 @@ async function signIn(){
   }
 
   setAuthLoading(true);
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  console.log("SIGNIN RESULT:", { data, error });
-  setAuthLoading(false);
+  try{
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error) throw error;
 
-  if(error) return logSupabaseError("signIn", error);
+    const ok = await enforceAdminGate();
+    if(!ok) {
+      setAuthLoading(false);
+      return;
+    }
 
-  const ok = await enforceAdminGate();
-  if(!ok) return;
-
-  await reloadAll();
-  toast("Welcome");
+    await reloadAll();
+    toast("Welcome");
+  }catch(err){
+    console.error("LOGIN ERROR:", err);
+    lockErr(err?.message || "Login failed");
+  }finally{
+    setAuthLoading(false);
+  }
 }
 
 async function signUp(){
@@ -750,52 +670,43 @@ async function signUp(){
   }
 
   setAuthLoading(true);
+  try{
+    // Only allow signup if email exists in members
+    const pre = await sb.from("members").select("id,email").eq("email", email).maybeSingle();
+    if(pre.error) throw pre.error;
+    if(!pre.data){
+      lockErr("Signup blocked: your email is not registered by admin yet.");
+      return;
+    }
 
-  // Only allow signup if email exists in members
-  const pre = await sb.from("members").select("id,name,email").eq("email", email).maybeSingle();
-  console.log("MEMBER LOOKUP:", pre);
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if(error) throw error;
 
-  if(pre.error){
+    const userId = data?.user?.id;
+    if(!userId){
+      lockErr("Signup created, but user id missing. Try sign in.");
+      return;
+    }
+
+    // Create profile row (pending approval)
+    const prof = await sb.from("profiles").upsert([{
+      id: userId,
+      role: "member",
+      approved: false,
+      member_id: pre.data.id
+    }]);
+    if(prof.error) throw prof.error;
+
+    toast("Account created. Waiting for admin approval.");
+    await sb.auth.signOut();
+    setAuthMode("signin");
+    lockErr("Your account is pending admin approval. Please wait.");
+  }catch(err){
+    console.error("SIGNUP ERROR:", err);
+    lockErr(err?.message || "Signup failed");
+  }finally{
     setAuthLoading(false);
-    return logSupabaseError("members lookup", pre.error);
   }
-  if(!pre.data){
-    setAuthLoading(false);
-    lockErr("Signup blocked: your email is not registered by admin yet.");
-    return;
-  }
-
-  const { data, error } = await sb.auth.signUp({ email, password });
-  console.log("SIGNUP RESULT:", { data, error });
-
-  if(error){
-    setAuthLoading(false);
-    return logSupabaseError("signUp", error);
-  }
-
-  const userId = data?.user?.id;
-  if(!userId){
-    setAuthLoading(false);
-    lockErr("Signup created, but user id missing. Try sign in.");
-    return;
-  }
-
-  const prof = await sb.from("profiles").upsert([{
-    id: userId,
-    role: "member",
-    approved: false,
-    member_id: pre.data.id
-  }]);
-  console.log("PROFILE UPSERT:", prof);
-
-  setAuthLoading(false);
-
-  if(prof.error) logSupabaseError("profiles upsert", prof.error);
-
-  toast("Account created. Waiting for admin approval.");
-  await sb.auth.signOut();
-  setAuthMode("signin");
-  lockErr("Your account is pending admin approval. Please wait.");
 }
 
 async function signOut(){
@@ -806,15 +717,22 @@ async function signOut(){
 }
 
 /* ===========================
-   DATA LOAD
-   This is a complete working loader + renderer.
-   If any table is blocked by RLS, it will show the error.
+   SAFE SELECT (works even if order column doesn’t exist)
 =========================== */
-async function safeSelect(table, queryBuilderFn){
+async function safeSelect(table, preferredOrderCols = []){
+  sideErr("");
+  // Try with ordering, then fallback without order
+  for(const col of preferredOrderCols){
+    try{
+      const res = await sb.from(table).select("*").order(col, {ascending:false});
+      if(res.error) throw res.error;
+      return res.data || [];
+    }catch(e){
+      // try next col
+    }
+  }
   try{
-    let q = sb.from(table).select("*");
-    if(queryBuilderFn) q = queryBuilderFn(q);
-    const res = await q;
+    const res = await sb.from(table).select("*");
     if(res.error) throw res.error;
     return res.data || [];
   }catch(e){
@@ -824,38 +742,40 @@ async function safeSelect(table, queryBuilderFn){
   }
 }
 
+async function safeSingle(table){
+  try{
+    const res = await sb.from(table).select("*").maybeSingle();
+    if(res.error) throw res.error;
+    return res.data || null;
+  }catch(e){
+    return null;
+  }
+}
+
 function memberNameById(id){
+  if(!id) return "—";
   const m = members.find(x => x.id === id);
-  return m?.name || m?.full_name || m?.email || id || "—";
+  return m?.name || m?.full_name || m?.email || String(id);
 }
 
-function badgeStatus(status){
-  const s = String(status || "").toLowerCase();
-  if(s.includes("pending")) return `<span class="badge b-pending">Pending</span>`;
-  if(s.includes("active")) return `<span class="badge b-active">Active</span>`;
-  if(s.includes("cleared")) return `<span class="badge b-cleared">Cleared</span>`;
-  if(s.includes("paid")) return `<span class="badge b-paid">Paid</span>`;
-  if(s.includes("unpaid")) return `<span class="badge b-unpaid">Unpaid</span>`;
-  return `<span class="badge b-unknown">${status || "—"}</span>`;
-}
-
-function renderTable(tbodyId, rowsHtml){
+function renderTable(tbodyId, rowsHtml, colSpan=10){
   const tb = document.getElementById(tbodyId);
   if(!tb) return;
-  tb.innerHTML = rowsHtml || `<tr><td colspan="10" class="sub">No data</td></tr>`;
+  tb.innerHTML = rowsHtml || `<tr><td colspan="${colSpan}" class="sub">No data</td></tr>`;
 }
 
 function renderCharts(){
-  // Histogram: contributions totals by member
+  // Bar: contributions totals by member_id
   const totals = {};
   for(const c of contributions){
-    const mid = c.member_id || c.memberId;
-    const amt = Number(c.amount || c.value || 0);
+    const mid = c.member_id;
+    const amt = Number(c.amount || 0);
     if(!mid) continue;
     totals[mid] = (totals[mid] || 0) + amt;
   }
-  const labels = Object.keys(totals).map(id => memberNameById(id));
-  const dataVals = Object.keys(totals).map(id => totals[id]);
+  const ids = Object.keys(totals);
+  const labels = ids.map(id => memberNameById(id));
+  const dataVals = ids.map(id => totals[id]);
 
   const ctx1 = document.getElementById("chartHist");
   if(ctx1){
@@ -888,109 +808,115 @@ function renderCharts(){
 }
 
 function renderKPIs(){
-  // members count
   document.getElementById("kMembers").textContent = String(members.length || 0);
 
-  // total contributions
   const totalContrib = contributions.reduce((a,r)=>a + Number(r.amount||0), 0);
   document.getElementById("kContrib").textContent = money(totalContrib);
 
-  // active loans count
   const activeLoans = loans.filter(l => String(l.status||"").toLowerCase().includes("active")).length;
   document.getElementById("kLoans").textContent = String(activeLoans);
 
-  // unpaid fines
   const unpaidFines = fines
-    .filter(f => String(f.paid||f.is_paid||"").toLowerCase() !== "true" && f.paid !== true)
+    .filter(f => !(f.paid === true || String(f.paid||"").toLowerCase()==="true"))
     .reduce((a,r)=>a + Number(r.amount||0), 0);
   document.getElementById("kFines").textContent = money(unpaidFines);
 
-  // total interest mini (uses appState if you track it)
   document.getElementById("kInterestMini").textContent = money(appState.total_interest_generated || 0);
 }
 
 function renderAll(){
-  // Members
-  renderTable("tbMembers",
+  renderTable(
+    "tbMembers",
     members.map(m => `
       <tr>
         <td>${m.name || m.full_name || "—"}</td>
         <td>${m.email || "—"}</td>
         <td class="tdCenter">${badgeStatus(m.status || "active")}</td>
       </tr>
-    `).join("")
+    `).join(""),
+    3
   );
 
-  // Contributions
-  renderTable("tbContrib",
+  renderTable(
+    "tbContrib",
     contributions.slice(0, 200).map(c => `
       <tr>
-        <td>${(c.date || c.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${safeDate(c.created_at || c.date)}</td>
         <td>${memberNameById(c.member_id)}</td>
         <td class="tdMoney">${money(c.amount || 0)}</td>
       </tr>
-    `).join("")
+    `).join(""),
+    3
   );
 
-  // Loans
-  renderTable("tbLoans",
+  renderTable(
+    "tbLoans",
     loans.slice(0, 200).map(l => `
       <tr>
-        <td>${(l.date || l.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${safeDate(l.issued_at || l.created_at)}</td>
         <td>${memberNameById(l.member_id)}</td>
-        <td class="tdMoney">${money(l.principal || l.amount || 0)}</td>
-        <td class="tdMoney">${money(l.total || l.total_amount || l.amount || 0)}</td>
+        <td class="tdMoney">${money(l.principal || 0)}</td>
+        <td class="tdMoney">${money(l.total_due ?? l.total ?? 0)}</td>
         <td class="tdCenter">${badgeStatus(l.status || "active")}</td>
       </tr>
-    `).join("")
+    `).join(""),
+    5
   );
 
-  // Fines
-  renderTable("tbFines",
+  renderTable(
+    "tbFines",
     fines.slice(0, 200).map(f => `
       <tr>
-        <td>${(f.date || f.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${safeDate(f.created_at || f.date)}</td>
         <td>${memberNameById(f.member_id)}</td>
         <td class="tdMoney">${money(f.amount || 0)}</td>
-        <td class="tdCenter">${(f.paid===true || String(f.paid||"").toLowerCase()==="true") ? badgeStatus("paid") : badgeStatus("unpaid")}</td>
+        <td class="tdCenter">${
+          (f.paid===true || String(f.paid||"").toLowerCase()==="true")
+            ? badgeStatus("paid")
+            : badgeStatus("unpaid")
+        }</td>
       </tr>
-    `).join("")
+    `).join(""),
+    4
   );
 
-  // Payouts
-  renderTable("tbPayouts",
+  renderTable(
+    "tbPayouts",
     payouts.slice(0, 200).map(p => `
       <tr>
-        <td>${(p.date || p.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${safeDate(p.created_at || p.date)}</td>
         <td>${memberNameById(p.member_id)}</td>
         <td class="tdMoney">${money(p.amount || 0)}</td>
       </tr>
-    `).join("")
+    `).join(""),
+    3
   );
 
-  // History
-  renderTable("tbHistory",
+  renderTable(
+    "tbHistory",
     history.slice(0, 200).map(h => `
       <tr>
-        <td>${(h.date || h.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${safeDate(h.created_at || h.date)}</td>
         <td>${h.type || h.event_type || "—"}</td>
         <td>${memberNameById(h.member_id)}</td>
         <td class="tdMoney">${money(h.amount || 0)}</td>
         <td>${h.note || h.details || "—"}</td>
       </tr>
-    `).join("")
+    `).join(""),
+    5
   );
 
-  // Foundation Payments
-  renderTable("tbFoundation",
+  renderTable(
+    "tbFoundation",
     foundationPayments.slice(0, 200).map(fp => `
       <tr>
-        <td>${(fp.date || fp.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${safeDate(fp.created_at || fp.date)}</td>
         <td>${memberNameById(fp.member_id)}</td>
         <td class="tdMoney">${money(fp.amount || 0)}</td>
         <td class="tdCenter">${badgeStatus(fp.status || "pending")}</td>
       </tr>
-    `).join("")
+    `).join(""),
+    4
   );
 
   renderKPIs();
@@ -1000,59 +926,45 @@ function renderAll(){
 async function reloadAll(){
   sideErr("");
 
-  // If you have an app_state table, this tries to read it; if not, it fails safely.
-  try{
-    const st = await sb.from("app_state").select("*").maybeSingle();
-    if(st?.data) appState = st.data;
-  }catch(e){
-    // ignore
-  }
+  const st = await safeSingle("app_state");
+  if(st) appState = st;
 
-  // Core tables (RLS will restrict automatically)
-  members = await safeSelect("members");
-  contributions = await safeSelect("contributions", (q)=>q.order("created_at", {ascending:false}));
-  loans = await safeSelect("loans", (q)=>q.order("created_at", {ascending:false}));
-  fines = await safeSelect("fines", (q)=>q.order("created_at", {ascending:false}));
-  payouts = await safeSelect("payouts", (q)=>q.order("created_at", {ascending:false}));
-  history = await safeSelect("history", (q)=>q.order("created_at", {ascending:false}));
-  foundationPayments = await safeSelect("foundation_payments", (q)=>q.order("created_at", {ascending:false}));
+  members = await safeSelect("members", ["created_at"]);
+  contributions = await safeSelect("contributions", ["created_at", "date"]);
+  loans = await safeSelect("loans", ["issued_at", "created_at"]);
+  fines = await safeSelect("fines", ["created_at", "date"]);
+  payouts = await safeSelect("payouts", ["created_at", "date"]);
+  history = await safeSelect("history", ["created_at", "date"]);
+  foundationPayments = await safeSelect("foundation_payments", ["created_at", "date"]);
 
-  // Rotation preview (simple)
   const next = members[appState.next_payout_index || 0];
   document.getElementById("nextName").textContent = next ? (next.name || next.email || "—") : "—";
-  document.getElementById("nextInfo").textContent = next ? `Next payout date: ${appState.next_payout_date || "—"}` : "—";
+  document.getElementById("nextInfo").textContent = `Next payout date: ${appState.next_payout_date || "—"}`;
 
   renderAll();
   toast("Data refreshed");
 }
 
-/* ===========================
-   RUN PAYOUT (safe placeholder)
-   Your actual logic can replace this.
-=========================== */
 async function runPayout(){
   if(!window.isAdmin){
     toast("Only admin can run payout.");
     return;
   }
-  toast("Run Payout: connect this to your payout SQL function / insert logic.");
+  toast("Run Payout: connect this to your payout function/logic.");
 }
 
 /* ===========================
    WIRE UI
 =========================== */
 function wireUI(){
-  // Auth tabs
   document.getElementById("tabSignIn").addEventListener("click", ()=>setAuthMode("signin"));
   document.getElementById("tabSignUp").addEventListener("click", ()=>setAuthMode("signup"));
 
-  // Auth button
   document.getElementById("btnAuth").addEventListener("click", ()=>{
     if(AUTH_MODE === "signup") return signUp();
     return signIn();
   });
 
-  // Enter key submits
   document.getElementById("password").addEventListener("keydown", (e)=>{
     if(e.key === "Enter"){
       if(AUTH_MODE === "signup") return signUp();
@@ -1060,7 +972,6 @@ function wireUI(){
     }
   });
 
-  // Sidebar nav
   document.getElementById("navDash").addEventListener("click", ()=>{ setActiveNav("navDash"); show("dash","Dashboard"); });
   document.getElementById("navMembers").addEventListener("click", ()=>{ setActiveNav("navMembers"); show("members","Members"); });
   document.getElementById("navContrib").addEventListener("click", ()=>{ setActiveNav("navContrib"); show("contrib","Contributions"); });
@@ -1070,7 +981,6 @@ function wireUI(){
   document.getElementById("navHistory").addEventListener("click", ()=>{ setActiveNav("navHistory"); show("history","History"); });
   document.getElementById("navFPayments").addEventListener("click", ()=>{ setActiveNav("navFPayments"); show("foundation_payments","Foundation Payments"); });
 
-  // Buttons
   document.getElementById("btnLogout").addEventListener("click", signOut);
   document.getElementById("btnRefresh").addEventListener("click", reloadAll);
   document.getElementById("btnRunPayout").addEventListener("click", runPayout);
