@@ -5,7 +5,7 @@ from supabase import create_client
 # ----------------------------
 # SETTINGS
 # ----------------------------
-st.set_page_config(page_title="The Young Shall Grow – Member Dashboard", page_icon="🌱", layout="wide")
+st.set_page_config(page_title="The Young Shall Grow – Dashboard", page_icon="🌱", layout="wide")
 st.set_option("client.showErrorDetails", False)
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -81,7 +81,7 @@ def attach_jwt(access_token: str):
 # LOGIN
 # ----------------------------
 if not is_logged_in():
-    st.markdown("<div class='hdr'><h1 style='margin:0'>🌱 Member Login</h1><div class='small-muted'>Sign in with your Supabase Auth email/password</div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='hdr'><h1 style='margin:0'>🌱 Login</h1><div class='small-muted'>Sign in with your Supabase Auth email/password</div></div>", unsafe_allow_html=True)
     st.write("")
 
     with st.form("login_form", clear_on_submit=False):
@@ -108,7 +108,7 @@ user_email = st.session_state.get("user_email", "").lower()
 is_admin = user_email in ADMIN_EMAILS
 
 # ----------------------------
-# GET MEMBER (THIS GIVES US MEMBER_ID)
+# GET MY MEMBER ROW (RLS limits to own row)
 # ----------------------------
 try:
     rows = supabase.table("members").select("id,name,email,phone,has_benefits,position").limit(1).execute().data
@@ -120,18 +120,21 @@ if not my_member:
     st.warning("No member profile found. Ensure public.members.email matches the Auth email exactly.")
     st.stop()
 
-member_id = my_member["id"]  # we will use this in ALL queries
+my_member_id = int(my_member["id"])
 
 # ----------------------------
-# HEADER
+# FILTER PANEL (includes MEMBER ID FILTER + RECORD ID FILTER)
 # ----------------------------
 st.markdown(
     f"""
     <div class='hdr'>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
         <div>
-          <h1 style="margin:0">📊 Member Dashboard</h1>
-          <div class="small-muted">Your data is filtered by <b>member_id = {member_id}</b></div>
+          <h1 style="margin:0">📊 Dashboard</h1>
+          <div class="small-muted">
+            Logged in as <b>{user_email}</b> {'(admin)' if is_admin else ''} •
+            Default member_id = <b>{my_member_id}</b>
+          </div>
         </div>
         <div style="display:flex;gap:10px;align-items:center">
           <div class="badge"><b>{user_email}</b> <span>{'(admin)' if is_admin else ''}</span></div>
@@ -144,18 +147,29 @@ st.markdown(
 st.write("")
 st.button("Logout", on_click=logout)
 
-# ----------------------------
-# FILTERS (UPDATED: includes Record ID)
-# ----------------------------
-st.subheader("My Overview")
+st.subheader("Filters")
 
-f1, f2, f3, f4 = st.columns([2, 3, 2, 2])
+f1, f2, f3, f4, f5 = st.columns([2, 3, 2, 2, 2])
 
 range_opt = f1.selectbox("Time range", ["All time", "Last 30 days", "Last 90 days", "This year"], index=0)
-search_text = f2.text_input("Quick search (reason/kind/status)", placeholder="e.g. unpaid, late, foundation...")
-record_id = f3.text_input("Record ID", placeholder="e.g. 58")
-show_only_unpaid = f4.checkbox("Only unpaid fines", value=False)
+search_text = f2.text_input("Quick search", placeholder="e.g. unpaid, paid, pending, late, foundation...")
+member_filter = f3.text_input("Member ID", placeholder="leave blank = me")
+record_id = f4.text_input("Record ID", placeholder="e.g. 58")
+show_only_unpaid = f5.checkbox("Only unpaid fines", value=False)
 
+# Determine which member_id to use for queries:
+# - normal members: always their own id
+# - admin: can type another member id
+effective_member_id = my_member_id
+if is_admin and member_filter.strip():
+    try:
+        effective_member_id = int(member_filter.strip())
+    except Exception:
+        effective_member_id = my_member_id
+
+# ----------------------------
+# FILTER FUNCTIONS
+# ----------------------------
 def apply_date_filter(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
     if df.empty or date_col not in df.columns:
         return df
@@ -179,7 +193,7 @@ def apply_search(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
             mask = mask | df[c].astype(str).str.lower().str.contains(s, na=False)
     return df[mask]
 
-def apply_id_filter(df: pd.DataFrame) -> pd.DataFrame:
+def apply_record_id_filter(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or not record_id.strip():
         return df
     try:
@@ -188,14 +202,13 @@ def apply_id_filter(df: pd.DataFrame) -> pd.DataFrame:
         return df
     if "id" not in df.columns:
         return df
-    # ensure numeric compare
     return df[pd.to_numeric(df["id"], errors="coerce") == rid]
 
 # ----------------------------
-# FETCH HELPERS (ALWAYS USE member_id)
+# FETCH (ALWAYS FILTER BY member_id)
 # ----------------------------
 def fetch_df(table: str, cols="*", order_col=None, date_col=None) -> pd.DataFrame:
-    q = supabase.table(table).select(cols).eq("member_id", member_id)
+    q = supabase.table(table).select(cols).eq("member_id", effective_member_id)
     if order_col:
         q = q.order(order_col, desc=True)
     data = q.execute().data
@@ -209,7 +222,7 @@ def fetch_df(table: str, cols="*", order_col=None, date_col=None) -> pd.DataFram
 # ----------------------------
 contrib_df = fetch_df("contributions", "id,member_id,amount,kind,created_at,updated_at", order_col="created_at", date_col="created_at")
 contrib_df = apply_search(contrib_df, ["kind"])
-contrib_df = apply_id_filter(contrib_df)
+contrib_df = apply_record_id_filter(contrib_df)
 
 found_df = fetch_df(
     "foundation_payments",
@@ -218,19 +231,19 @@ found_df = fetch_df(
     date_col="date_paid"
 )
 found_df = apply_search(found_df, ["status", "notes"])
-found_df = apply_id_filter(found_df)
+found_df = apply_record_id_filter(found_df)
 
 fines_df = fetch_df("fines", "id,member_id,amount,reason,status,paid_at,created_at,updated_at", order_col="created_at", date_col="created_at")
 fines_df = apply_search(fines_df, ["reason", "status"])
 if show_only_unpaid and "status" in fines_df.columns:
     fines_df = fines_df[fines_df["status"].astype(str).str.lower() == "unpaid"]
-fines_df = apply_id_filter(fines_df)
+fines_df = apply_record_id_filter(fines_df)
 
 loans_df = pd.DataFrame()
 try:
     loans_df = fetch_df("loans", "*", order_col="created_at", date_col="created_at")
     loans_df = apply_search(loans_df, ["status", "notes", "type"])
-    loans_df = apply_id_filter(loans_df)
+    loans_df = apply_record_id_filter(loans_df)
 except Exception:
     loans_df = pd.DataFrame()
 
@@ -258,6 +271,9 @@ active_loans = 0
 if not loans_df.empty and "status" in loans_df.columns:
     active_loans = int((loans_df["status"].astype(str).str.lower().isin(["active", "open", "ongoing"])).sum())
 
+st.write("")
+st.markdown(f"<div class='small-muted'>Currently viewing: <b>member_id = {effective_member_id}</b></div>", unsafe_allow_html=True)
+
 k1, k2, k3, k4 = st.columns(4)
 k1.markdown(f"<div class='kpi'><div class='label'>Total Contributions</div><div class='value'>{total_contrib:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
 k2.markdown(f"<div class='kpi'><div class='label'>Total Foundation Paid</div><div class='value'>{total_found_paid:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
@@ -272,19 +288,19 @@ st.markdown("<hr/>", unsafe_allow_html=True)
 tabs = st.tabs(["Contributions", "Foundation Payments", "Fines", "Loans", "My Profile"])
 
 with tabs[0]:
-    st.subheader("My Contributions")
+    st.subheader("Contributions")
     st.dataframe(contrib_df, use_container_width=True)
 
 with tabs[1]:
-    st.subheader("My Foundation Payments")
+    st.subheader("Foundation Payments")
     st.dataframe(found_df, use_container_width=True)
 
 with tabs[2]:
-    st.subheader("My Fines")
+    st.subheader("Fines")
     st.dataframe(fines_df, use_container_width=True)
 
 with tabs[3]:
-    st.subheader("My Loans")
+    st.subheader("Loans")
     if loans_df.empty:
         st.info("Loans table not found or no loans available for this member.")
     else:
@@ -294,5 +310,10 @@ with tabs[4]:
     st.subheader("My Profile")
     st.json(my_member)
 
+# ----------------------------
+# ADMIN NOTE
+# ----------------------------
 if is_admin:
-    st.info("Admin detected. If you want an Admin view of all members, I can add admin-only pages (still safe with RLS, no service key).")
+    st.info("Admin detected. You can type a Member ID in the filter to view that member’s records (RLS must allow admin access to all members).")
+else:
+    st.caption("You can only view your own data.")
