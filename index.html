@@ -222,6 +222,11 @@
         <div class="kpi"><div class="label">Pending Foundation Payments</div><div class="value" id="pendingFoundation">--</div></div>
         <div class="kpi"><div class="label">My Total Value</div><div class="value" id="myValue">--</div></div>
         <div class="kpi"><div class="label">My Member ID</div><div class="value" id="myMemberId">--</div></div>
+        <div class="kpi">
+  <div class="label">Total Foundation Payment</div>
+  <div class="value" id="totalFoundationPayment">--</div>
+</div>
+
 
         <div class="kpi"><div class="label">Total Loans</div><div class="value" id="totalLoans">--</div></div>
         <div class="kpi"><div class="label">Total Interest Generated</div><div class="value" id="totalInterest">--</div></div>
@@ -461,12 +466,16 @@
     try{
       // 1) Pot + member id + my value from your RPCs
       let pot = null, myId = null, myVal = null;
+      
 
       try{ pot = await callRPC("current_pot_amount"); }catch(e){}
       try{ myId = await callRPC("current_member_id"); }catch(e){}
       try{
         if(myId !== null && myId !== undefined){
           myVal = await callRPC("member_total_value", { p_member_id: Number(myId) });
+          const foundationTotal = await callRPC("total_foundation_payment");
+totalFoundationPayment.textContent = fmtMoney(foundationTotal);
+
         }
       }catch(e){}
 
