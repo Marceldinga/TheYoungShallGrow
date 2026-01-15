@@ -31,7 +31,6 @@
       --shadow: 0 14px 40px rgba(15, 23, 42, .35);
       --shadow2: 0 8px 20px rgba(15, 23, 42, .25);
       --radius:18px;
-
       --ring: 0 0 0 4px rgba(42,106,223,.18);
     }
 
@@ -48,8 +47,10 @@
       min-height:100vh;
     }
 
-    /* LOGIN */
-    #locked{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:22px}
+    #locked{
+      display:flex;align-items:center;justify-content:center;
+      min-height:100vh;padding:22px;
+    }
     .lockBox{
       width:min(520px,100%);
       background:var(--card);
@@ -58,8 +59,14 @@
       padding:18px;
       box-shadow:var(--shadow);
     }
-    .lockTop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
-    .brandMini{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.2px}
+    .lockTop{
+      display:flex;align-items:center;justify-content:space-between;
+      gap:12px;margin-bottom:10px;
+    }
+    .brandMini{
+      display:flex;align-items:center;gap:10px;
+      font-weight:900; letter-spacing:.2px;
+    }
     .dot{
       width:10px;height:10px;border-radius:999px;
       background:linear-gradient(135deg, var(--primary2), var(--accent));
@@ -84,7 +91,7 @@
       background:var(--card2);
       color:var(--text);
       outline:none;
-      transition: box-shadow .12s ease, border-color .12s ease, transform .08s ease;
+      transition: box-shadow .12s ease, border-color .12s ease;
     }
     input::placeholder{color:#94a3b8}
     input:focus{
@@ -94,127 +101,90 @@
     }
 
     .btn{
-      padding:11px 14px;border-radius:14px;
+      padding:11px 14px;
+      border-radius:14px;
       border:1px solid rgba(31,75,153,.35);
       background: linear-gradient(135deg, rgba(42,106,223,.20), rgba(20,184,166,.12));
-      color:var(--text);cursor:pointer;
+      color:var(--text);
+      cursor:pointer;
       box-shadow:var(--shadow2);
       transition: transform .08s ease, filter .10s ease, box-shadow .12s ease;
       font-weight:700;
     }
     .btn:hover{filter:brightness(1.03)}
     .btn:active{transform: translateY(1px)}
-    .btn.ghost{background:var(--card2);box-shadow:none;border-color: var(--border);font-weight:700}
+    .btn.ghost{
+      background:var(--card2);
+      box-shadow:none;
+      border-color: var(--border);
+      font-weight:700;
+    }
     .btn.primary{
       background: linear-gradient(135deg, rgba(31,75,153,.98), rgba(42,106,223,.95));
-      color:#fff;border-color: rgba(31,75,153,.30);
+      color:#fff;
+      border-color: rgba(31,75,153,.30);
     }
     .btn:disabled{opacity:.55;cursor:not-allowed;filter:grayscale(20%);box-shadow:none}
 
     .lockGrid{display:grid;grid-template-columns:1fr;gap:10px}
     .err{
-      color:#fecaca;background:rgba(239,68,68,.10);
+      color:#fecaca;
+      background:rgba(239,68,68,.10);
       border:1px solid rgba(239,68,68,.25);
       padding:10px 12px;border-radius:14px;
-      white-space:pre-wrap;font-size:12px;display:none;
+      white-space:pre-wrap;font-size:12px;
+      display:none;
     }
 
-    /* APP */
     .wrap{display:flex;min-height:100vh}
     .sidebar{
-      width:330px;padding:16px;border-right:1px solid var(--border);
-      background:rgba(21,28,47,.92);backdrop-filter: blur(10px);
+      width:330px;
+      padding:16px;
+      border-right:1px solid var(--border);
+      background:rgba(21,28,47,.92);
+      backdrop-filter: blur(10px);
     }
     .main{flex:1;padding:18px}
-    .brand{font-weight:900;font-size:16px;letter-spacing:.2px;display:flex;align-items:center;gap:10px}
+
+    .brand{
+      font-weight:900;
+      font-size:16px;
+      letter-spacing:.2px;
+      display:flex;align-items:center;gap:10px;
+    }
     .sub{color:var(--muted);font-size:12px;margin-top:6px;line-height:1.4}
     .card{
-      background:var(--card);border:1px solid var(--border);
-      border-radius:var(--radius);padding:14px;margin-top:14px;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:14px;
+      margin-top:14px;
       box-shadow:var(--shadow2);
     }
     .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
     .pill{
       display:inline-flex;align-items:center;gap:8px;
-      padding:6px 10px;border-radius:999px;border:1px solid var(--border);
-      background:rgba(31,75,153,.10);font-size:12px;color:var(--text);white-space:nowrap;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(31,75,153,.10);
+      font-size:12px;
+      color:var(--text);
+      white-space:nowrap;
     }
     .pill b{font-weight:900}
 
-    .nav{display:flex;flex-direction:column;gap:8px;margin-top:14px}
-    .nav button{
-      width:100%;text-align:left;padding:11px 12px;border-radius:14px;
-      border:1px solid var(--border);background:var(--card2);color:var(--text);
-      cursor:pointer;transition: box-shadow .12s ease, transform .06s ease, border-color .12s ease;
-      font-weight:800;
-    }
-    .nav button:hover{border-color: rgba(42,106,223,.35);box-shadow: 0 8px 18px rgba(0,0,0,.22)}
-    .nav button.active{
-      border-color: rgba(42,106,223,.55);
-      box-shadow: 0 0 0 3px rgba(42,106,223,.18) inset;
-      background: rgba(42,106,223,.14);
-    }
-
-    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
-    .titleWrap{display:flex;flex-direction:column;gap:4px}
-    .title{font-size:18px;font-weight:900}
-    .subtitleSmall{font-size:12px;color:var(--muted)}
-    .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .kpi{position:relative;overflow:hidden}
-    .kpi:before{
-      content:"";position:absolute; inset:0;
-      background: linear-gradient(135deg, rgba(42,106,223,.10), rgba(20,184,166,.08));
-      pointer-events:none;
-    }
-    .kpi > *{position:relative}
-    .kpi .label{color:var(--muted);font-size:12px;font-weight:800}
-    .kpi .val{font-size:22px;font-weight:1000;margin-top:6px;letter-spacing:.2px}
-    .section{display:none}
-    .section.active{display:block}
-
-    .tableWrap{overflow:auto;border-radius:14px;border:1px solid var(--border);margin-top:10px}
-    table{width:100%;border-collapse:separate;border-spacing:0;min-width:720px;background:var(--card)}
-    th,td{
-      padding:10px 10px;border-bottom:1px solid var(--border);
-      text-align:left;font-size:12px;vertical-align:top;
-    }
-    th{color:var(--muted);font-weight:900;background:#1f2937;position:sticky; top:0; z-index:1}
-    tbody tr:nth-child(even) td{background:#19213a}
-    tbody tr:hover td{background:rgba(42,106,223,.12)}
-    .tdMoney{text-align:right;font-variant-numeric: tabular-nums}
-    .tdCenter{text-align:center}
-
-    .badge{
-      display:inline-flex;align-items:center;gap:6px;
-      padding:5px 10px;border-radius:999px;font-size:11px;font-weight:900;
-      border:1px solid transparent;white-space:nowrap;
-    }
-    .badge::before{content:"";width:8px;height:8px;border-radius:999px;background: currentColor;opacity:.95;box-shadow:0 0 0 3px rgba(0,0,0,.12)}
-    .b-pending{color:#f59e0b;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.25)}
-    .b-active{color:#60a5fa;background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.25)}
-    .b-cleared{color:#34d399;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.25)}
-    .b-paid{color:#34d399;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.25)}
-    .b-unpaid{color:#f87171;background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.25)}
-    .b-unknown{color:#cbd5e1;background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.22)}
-
     #toast{
       position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
-      background:rgba(15,23,42,.92);color:#fff;
-      padding:10px 14px;border-radius:14px;box-shadow:var(--shadow);
-      display:none;z-index:9999;max-width:min(560px,92vw);font-size:13px;
-    }
-
-    @media (max-width:1100px){
-      .grid4{grid-template-columns:1fr 1fr}
-      .grid2{grid-template-columns:1fr}
-      .sidebar{width:100%;max-width:360px}
-    }
-    @media (max-width:740px){
-      .wrap{flex-direction:column}
-      .sidebar{max-width:none;border-right:none;border-bottom:1px solid var(--border)}
-      .main{padding:14px}
-      table{min-width:640px}
+      background:rgba(15,23,42,.92);
+      color:#fff;
+      padding:10px 14px;
+      border-radius:14px;
+      box-shadow:var(--shadow);
+      display:none;
+      z-index:9999;
+      max-width:min(560px,92vw);
+      font-size:13px;
     }
   </style>
 </head>
@@ -253,7 +223,7 @@
   </div>
 </div>
 
-<!-- APP -->
+<!-- APP (simple placeholder so login completes) -->
 <div id="app" class="wrap" style="display:none;">
   <aside class="sidebar">
     <div class="brand"><span class="dot"></span> TheYoungShallGrow: Dashboard</div>
@@ -265,166 +235,16 @@
       <button class="btn ghost" style="width:100%;margin-top:10px" type="button" id="btnLogout">Logout</button>
       <div id="sideErr" class="err"></div>
     </div>
-
-    <div class="nav">
-      <button id="navDash" class="active" type="button">Dashboard</button>
-      <button id="navMembers" type="button">Members</button>
-      <button id="navContrib" type="button">Contributions</button>
-      <button id="navLoans" type="button">Loans</button>
-      <button id="navFines" type="button">Fines</button>
-      <button id="navPayouts" type="button">Payouts</button>
-      <button id="navHistory" type="button">History</button>
-      <button id="navFPayments" type="button">Foundation Payments</button>
-
-      <button class="btn ghost" style="margin-top:6px" type="button" id="btnRefresh">Refresh</button>
-    </div>
-
-    <div class="card">
-      <div class="sub"><b>Rotation</b></div>
-      <div style="margin-top:8px;font-weight:1000;font-size:18px" id="nextName">—</div>
-      <div class="sub" id="nextInfo">—</div>
-      <button class="btn primary" style="width:100%;margin-top:10px" type="button" id="btnRunPayout">Run Payout</button>
-      <div class="sub" style="margin-top:10px;">Start: <b>Jan 3, 2026</b> • Every 14 days</div>
-    </div>
   </aside>
 
   <main class="main">
-    <div class="topbar">
-      <div class="titleWrap">
-        <div class="title" id="pageTitle">Dashboard</div>
-        <div class="subtitleSmall" id="roleHint">Business overview and recent activity</div>
+    <div class="card">
+      <div style="font-weight:900">✅ Login Success</div>
+      <div class="sub" style="margin-top:8px">
+        If you see this screen, authentication + profiles gate is working.
+        Next step is loading your tables (members, contributions, loans, etc.).
       </div>
-
-      <span class="pill">Total Interest: <b id="kInterestMini">$0</b></span>
     </div>
-
-    <!-- DASH -->
-    <section id="sec-dash" class="section active">
-      <div class="grid4">
-        <div class="card kpi">
-          <div class="label">Members</div>
-          <div class="val" id="kMembers">0</div>
-        </div>
-        <div class="card kpi">
-          <div class="label">Total Contributions</div>
-          <div class="val" id="kContrib">$0</div>
-        </div>
-        <div class="card kpi">
-          <div class="label">Active Loans</div>
-          <div class="val" id="kLoans">0</div>
-        </div>
-        <div class="card kpi">
-          <div class="label">Unpaid Fines</div>
-          <div class="val" id="kFines">$0</div>
-        </div>
-      </div>
-
-      <div class="grid2" style="margin-top:12px">
-        <div class="card">
-          <div style="font-weight:900;margin-bottom:8px">Contributions by Member</div>
-          <canvas id="chartHist" height="140"></canvas>
-          <div class="sub" style="margin-top:8px">If you see “No data”, table is empty or RLS is blocking.</div>
-        </div>
-        <div class="card">
-          <div style="font-weight:900;margin-bottom:8px">Loans Status</div>
-          <canvas id="chartPie" height="140"></canvas>
-          <div class="sub" style="margin-top:8px">Simple summary chart.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- MEMBERS -->
-    <section id="sec-members" class="section">
-      <div class="card">
-        <div style="font-weight:900">Members</div>
-        <div class="sub">Admin sees all. Member sees only their row (RLS).</div>
-        <div class="tableWrap">
-          <table>
-            <thead><tr><th>Name</th><th>Email</th><th class="tdCenter">Status</th></tr></thead>
-            <tbody id="tbMembers"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- CONTRIBUTIONS -->
-    <section id="sec-contrib" class="section">
-      <div class="card">
-        <div style="font-weight:900">Contributions</div>
-        <div class="tableWrap">
-          <table>
-            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th></tr></thead>
-            <tbody id="tbContrib"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- LOANS -->
-    <section id="sec-loans" class="section">
-      <div class="card">
-        <div style="font-weight:900">Loans</div>
-        <div class="tableWrap">
-          <table>
-            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Principal</th><th class="tdMoney">Total Due</th><th class="tdCenter">Status</th></tr></thead>
-            <tbody id="tbLoans"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- FINES -->
-    <section id="sec-fines" class="section">
-      <div class="card">
-        <div style="font-weight:900">Fines</div>
-        <div class="tableWrap">
-          <table>
-            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th><th class="tdCenter">Paid</th></tr></thead>
-            <tbody id="tbFines"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- PAYOUTS -->
-    <section id="sec-payouts" class="section">
-      <div class="card">
-        <div style="font-weight:900">Payouts</div>
-        <div class="tableWrap">
-          <table>
-            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th></tr></thead>
-            <tbody id="tbPayouts"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- HISTORY -->
-    <section id="sec-history" class="section">
-      <div class="card">
-        <div style="font-weight:900">History</div>
-        <div class="tableWrap">
-          <table>
-            <thead><tr><th>Date</th><th>Type</th><th>Member</th><th class="tdMoney">Amount</th><th>Note</th></tr></thead>
-            <tbody id="tbHistory"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- FOUNDATION PAYMENTS -->
-    <section id="sec-foundation_payments" class="section">
-      <div class="card">
-        <div style="font-weight:900">Foundation Payments</div>
-        <div class="tableWrap">
-          <table>
-            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th><th class="tdCenter">Status</th></tr></thead>
-            <tbody id="tbFoundation"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
   </main>
 </div>
 
@@ -441,32 +261,11 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
 });
 
-/* ===========================
-   STATE
-=========================== */
-let appState = { total_interest_generated: 0, next_payout_index: 0, next_payout_date: null };
-let members = [];
-let contributions = [];
-let payouts = [];
-let fines = [];
-let foundationPayments = [];
-let loans = [];
-let history = [];
-
-let histChart = null;
-let pieChart = null;
-
-window.isAdmin = false;
-window.currentMemberId = null;
-window.profileApproved = false;
-
 let AUTH_MODE = "signin";
 
 /* ===========================
-   HELPERS
+   UI HELPERS
 =========================== */
-const money = (x) => "$" + (Number(x)||0).toLocaleString();
-
 function toast(msg){
   const el = document.getElementById("toast");
   el.textContent = String(msg || "");
@@ -474,66 +273,22 @@ function toast(msg){
   clearTimeout(toast._t);
   toast._t = setTimeout(() => { el.style.display = "none"; }, 3500);
 }
-
+function lockErr(msg){
+  const el = document.getElementById("lockErr");
+  el.style.display = msg ? "block" : "none";
+  el.textContent = msg || "";
+}
 function sideErr(msg){
   const el = document.getElementById("sideErr");
   if(!el) return;
   el.style.display = msg ? "block" : "none";
   el.textContent = msg || "";
 }
-
-function lockErr(msg){
-  const el = document.getElementById("lockErr");
-  if(!el) return;
-  el.style.display = msg ? "block" : "none";
-  el.textContent = msg || "";
-}
-
 function setAuthLoading(on){
   const btn = document.getElementById("btnAuth");
   btn.disabled = !!on;
   btn.textContent = on ? "Please wait..." : (AUTH_MODE === "signup" ? "Create account" : "Sign in");
 }
-
-function logSupabaseError(where, error){
-  if(!error) return;
-  console.error(`[Supabase Error] ${where}`, error);
-  const msg = `${where}: ${error.message || error}`;
-  lockErr(msg);
-  toast(msg);
-}
-
-window.addEventListener("error", (e) => console.error("JS error:", e?.message || e));
-window.addEventListener("unhandledrejection", (e) => console.error("Promise error:", e?.reason || e));
-
-function setActiveNav(id){
-  document.querySelectorAll(".nav button").forEach(b => b.classList.remove("active"));
-  const btn = document.getElementById(id);
-  if(btn) btn.classList.add("active");
-}
-function show(sectionKey, title){
-  document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
-  const sec = document.getElementById(`sec-${sectionKey}`);
-  if(sec) sec.classList.add("active");
-  document.getElementById("pageTitle").textContent = title || "Dashboard";
-}
-
-function safeDate(x){
-  if(!x) return "—";
-  const s = String(x);
-  return s.length >= 10 ? s.slice(0,10) : s;
-}
-
-function badgeStatus(status){
-  const s = String(status || "").toLowerCase();
-  if(s.includes("pending")) return `<span class="badge b-pending">Pending</span>`;
-  if(s.includes("active")) return `<span class="badge b-active">Active</span>`;
-  if(s.includes("cleared")) return `<span class="badge b-cleared">Cleared</span>`;
-  if(s.includes("paid")) return `<span class="badge b-paid">Paid</span>`;
-  if(s.includes("unpaid")) return `<span class="badge b-unpaid">Unpaid</span>`;
-  return `<span class="badge b-unknown">${status || "—"}</span>`;
-}
-
 function applyAuthModeUI(){
   const su = document.getElementById("signupFields");
   const btn = document.getElementById("btnAuth");
@@ -552,7 +307,6 @@ function applyAuthModeUI(){
     tabUp.classList.add("ghost"); tabUp.classList.remove("primary");
   }
 }
-
 function setAuthMode(mode){
   AUTH_MODE = (mode === "signup") ? "signup" : "signin";
   lockErr(""); sideErr("");
@@ -560,22 +314,24 @@ function setAuthMode(mode){
 }
 
 /* ===========================
-   ROLE / APPROVAL GATE
+   HARD TIMEOUT (prevents infinite "Please wait...")
+=========================== */
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms/1000}s`)), ms))
+  ]);
+}
+
+/* ===========================
+   LOGIN GATE: profiles
 =========================== */
 async function enforceAdminGate(){
-  const { data, error: userErr } = await sb.auth.getUser();
-  if(userErr){
-    lockErr("Auth error: " + userErr.message);
-    return false;
-  }
+  const { data: userRes, error: userErr } = await sb.auth.getUser();
+  if(userErr) throw userErr;
 
-  const user = data?.user;
-
-  if(!user){
-    document.getElementById("app").style.display = "none";
-    document.getElementById("locked").style.display = "flex";
-    return false;
-  }
+  const user = userRes?.user;
+  if(!user) return false;
 
   const { data: profile, error } = await sb
     .from("profiles")
@@ -583,31 +339,15 @@ async function enforceAdminGate(){
     .eq("id", user.id)
     .maybeSingle();
 
-  if(error){
-    sideErr("profiles blocked (RLS): " + error.message);
-    await sb.auth.signOut();
-    document.getElementById("app").style.display = "none";
-    document.getElementById("locked").style.display = "flex";
-    lockErr("Login blocked by profiles RLS. Fix profiles policies in Supabase.");
-    return false;
-  }
+  if(error) throw error;
+  if(!profile) throw new Error("No profiles row for this user.");
 
-  if(!profile){
-    await sb.auth.signOut();
-    document.getElementById("app").style.display = "none";
-    document.getElementById("locked").style.display = "flex";
-    lockErr("No profiles row for this user. Create it in public.profiles.");
-    return false;
-  }
+  // Require approved for members, admins always pass
+  const isAdmin = (profile.role === "admin");
+  const approved = !!profile.approved;
 
-  window.isAdmin = (profile.role === "admin");
-  window.currentMemberId = profile.member_id ?? null;
-  window.profileApproved = !!profile.approved;
-
-  if(!window.isAdmin && !window.profileApproved){
+  if(!isAdmin && !approved){
     await sb.auth.signOut();
-    document.getElementById("app").style.display = "none";
-    document.getElementById("locked").style.display = "flex";
     lockErr("Your account is pending admin approval. Please wait for admin to approve.");
     return false;
   }
@@ -619,14 +359,11 @@ async function enforceAdminGate(){
   document.getElementById("role").textContent = profile.role || "member";
   document.getElementById("today").textContent = new Date().toLocaleDateString();
 
-  // hide Members nav for non-admin
-  document.getElementById("navMembers").style.display = window.isAdmin ? "block" : "none";
-
   return true;
 }
 
 /* ===========================
-   AUTH (FIXED: no more stuck “Please wait…”)
+   AUTH
 =========================== */
 async function signIn(){
   lockErr(""); sideErr("");
@@ -639,21 +376,27 @@ async function signIn(){
   }
 
   setAuthLoading(true);
+
   try{
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if(error) throw error;
+    // If your request is blocked by network/adblock, this is where it hangs.
+    const res = await withTimeout(
+      sb.auth.signInWithPassword({ email, password }),
+      15000,
+      "Sign in"
+    );
 
-    const ok = await enforceAdminGate();
-    if(!ok) {
-      setAuthLoading(false);
-      return;
-    }
+    if(res.error) throw res.error;
 
-    await reloadAll();
+    const ok = await withTimeout(enforceAdminGate(), 15000, "Profile check");
+    if(!ok) return;
+
     toast("Welcome");
-  }catch(err){
-    console.error("LOGIN ERROR:", err);
-    lockErr(err?.message || "Login failed");
+  }catch(e){
+    console.error("SIGNIN ERROR:", e);
+    lockErr(
+      (e?.message || String(e)) +
+      "\n\nIf this keeps timing out, your browser/network is blocking requests to Supabase."
+    );
   }finally{
     setAuthLoading(false);
   }
@@ -670,40 +413,33 @@ async function signUp(){
   }
 
   setAuthLoading(true);
+
   try{
     // Only allow signup if email exists in members
-    const pre = await sb.from("members").select("id,email").eq("email", email).maybeSingle();
+    const pre = await withTimeout(
+      sb.from("members").select("id,email").eq("email", email).maybeSingle(),
+      15000,
+      "Members lookup"
+    );
+
     if(pre.error) throw pre.error;
-    if(!pre.data){
-      lockErr("Signup blocked: your email is not registered by admin yet.");
-      return;
-    }
+    if(!pre.data) throw new Error("Signup blocked: your email is not registered by admin yet.");
 
-    const { data, error } = await sb.auth.signUp({ email, password });
-    if(error) throw error;
+    const s = await withTimeout(
+      sb.auth.signUp({ email, password }),
+      15000,
+      "Sign up"
+    );
 
-    const userId = data?.user?.id;
-    if(!userId){
-      lockErr("Signup created, but user id missing. Try sign in.");
-      return;
-    }
-
-    // Create profile row (pending approval)
-    const prof = await sb.from("profiles").upsert([{
-      id: userId,
-      role: "member",
-      approved: false,
-      member_id: pre.data.id
-    }]);
-    if(prof.error) throw prof.error;
+    if(s.error) throw s.error;
 
     toast("Account created. Waiting for admin approval.");
     await sb.auth.signOut();
     setAuthMode("signin");
     lockErr("Your account is pending admin approval. Please wait.");
-  }catch(err){
-    console.error("SIGNUP ERROR:", err);
-    lockErr(err?.message || "Signup failed");
+  }catch(e){
+    console.error("SIGNUP ERROR:", e);
+    lockErr(e?.message || String(e));
   }finally{
     setAuthLoading(false);
   }
@@ -717,289 +453,27 @@ async function signOut(){
 }
 
 /* ===========================
-   SAFE SELECT (works even if order column doesn’t exist)
+   INIT / WIRE UI
 =========================== */
-async function safeSelect(table, preferredOrderCols = []){
-  sideErr("");
-  // Try with ordering, then fallback without order
-  for(const col of preferredOrderCols){
-    try{
-      const res = await sb.from(table).select("*").order(col, {ascending:false});
-      if(res.error) throw res.error;
-      return res.data || [];
-    }catch(e){
-      // try next col
-    }
-  }
-  try{
-    const res = await sb.from(table).select("*");
-    if(res.error) throw res.error;
-    return res.data || [];
-  }catch(e){
-    console.error(`Select failed (${table})`, e);
-    sideErr(`Table blocked or missing (${table}): ${e.message || e}`);
-    return [];
-  }
-}
-
-async function safeSingle(table){
-  try{
-    const res = await sb.from(table).select("*").maybeSingle();
-    if(res.error) throw res.error;
-    return res.data || null;
-  }catch(e){
-    return null;
-  }
-}
-
-function memberNameById(id){
-  if(!id) return "—";
-  const m = members.find(x => x.id === id);
-  return m?.name || m?.full_name || m?.email || String(id);
-}
-
-function renderTable(tbodyId, rowsHtml, colSpan=10){
-  const tb = document.getElementById(tbodyId);
-  if(!tb) return;
-  tb.innerHTML = rowsHtml || `<tr><td colspan="${colSpan}" class="sub">No data</td></tr>`;
-}
-
-function renderCharts(){
-  // Bar: contributions totals by member_id
-  const totals = {};
-  for(const c of contributions){
-    const mid = c.member_id;
-    const amt = Number(c.amount || 0);
-    if(!mid) continue;
-    totals[mid] = (totals[mid] || 0) + amt;
-  }
-  const ids = Object.keys(totals);
-  const labels = ids.map(id => memberNameById(id));
-  const dataVals = ids.map(id => totals[id]);
-
-  const ctx1 = document.getElementById("chartHist");
-  if(ctx1){
-    if(histChart) histChart.destroy();
-    histChart = new Chart(ctx1, {
-      type: "bar",
-      data: { labels, datasets: [{ label:"Total Contributions", data: dataVals }] },
-      options: { responsive:true, plugins:{ legend:{ display:true } } }
-    });
-  }
-
-  // Pie: loans status count
-  const statusCount = {};
-  for(const l of loans){
-    const s = String(l.status || "unknown").toLowerCase();
-    statusCount[s] = (statusCount[s] || 0) + 1;
-  }
-  const pieLabels = Object.keys(statusCount);
-  const pieData = pieLabels.map(k => statusCount[k]);
-
-  const ctx2 = document.getElementById("chartPie");
-  if(ctx2){
-    if(pieChart) pieChart.destroy();
-    pieChart = new Chart(ctx2, {
-      type:"pie",
-      data:{ labels: pieLabels, datasets:[{ data: pieData }] },
-      options:{ responsive:true }
-    });
-  }
-}
-
-function renderKPIs(){
-  document.getElementById("kMembers").textContent = String(members.length || 0);
-
-  const totalContrib = contributions.reduce((a,r)=>a + Number(r.amount||0), 0);
-  document.getElementById("kContrib").textContent = money(totalContrib);
-
-  const activeLoans = loans.filter(l => String(l.status||"").toLowerCase().includes("active")).length;
-  document.getElementById("kLoans").textContent = String(activeLoans);
-
-  const unpaidFines = fines
-    .filter(f => !(f.paid === true || String(f.paid||"").toLowerCase()==="true"))
-    .reduce((a,r)=>a + Number(r.amount||0), 0);
-  document.getElementById("kFines").textContent = money(unpaidFines);
-
-  document.getElementById("kInterestMini").textContent = money(appState.total_interest_generated || 0);
-}
-
-function renderAll(){
-  renderTable(
-    "tbMembers",
-    members.map(m => `
-      <tr>
-        <td>${m.name || m.full_name || "—"}</td>
-        <td>${m.email || "—"}</td>
-        <td class="tdCenter">${badgeStatus(m.status || "active")}</td>
-      </tr>
-    `).join(""),
-    3
-  );
-
-  renderTable(
-    "tbContrib",
-    contributions.slice(0, 200).map(c => `
-      <tr>
-        <td>${safeDate(c.created_at || c.date)}</td>
-        <td>${memberNameById(c.member_id)}</td>
-        <td class="tdMoney">${money(c.amount || 0)}</td>
-      </tr>
-    `).join(""),
-    3
-  );
-
-  renderTable(
-    "tbLoans",
-    loans.slice(0, 200).map(l => `
-      <tr>
-        <td>${safeDate(l.issued_at || l.created_at)}</td>
-        <td>${memberNameById(l.member_id)}</td>
-        <td class="tdMoney">${money(l.principal || 0)}</td>
-        <td class="tdMoney">${money(l.total_due ?? l.total ?? 0)}</td>
-        <td class="tdCenter">${badgeStatus(l.status || "active")}</td>
-      </tr>
-    `).join(""),
-    5
-  );
-
-  renderTable(
-    "tbFines",
-    fines.slice(0, 200).map(f => `
-      <tr>
-        <td>${safeDate(f.created_at || f.date)}</td>
-        <td>${memberNameById(f.member_id)}</td>
-        <td class="tdMoney">${money(f.amount || 0)}</td>
-        <td class="tdCenter">${
-          (f.paid===true || String(f.paid||"").toLowerCase()==="true")
-            ? badgeStatus("paid")
-            : badgeStatus("unpaid")
-        }</td>
-      </tr>
-    `).join(""),
-    4
-  );
-
-  renderTable(
-    "tbPayouts",
-    payouts.slice(0, 200).map(p => `
-      <tr>
-        <td>${safeDate(p.created_at || p.date)}</td>
-        <td>${memberNameById(p.member_id)}</td>
-        <td class="tdMoney">${money(p.amount || 0)}</td>
-      </tr>
-    `).join(""),
-    3
-  );
-
-  renderTable(
-    "tbHistory",
-    history.slice(0, 200).map(h => `
-      <tr>
-        <td>${safeDate(h.created_at || h.date)}</td>
-        <td>${h.type || h.event_type || "—"}</td>
-        <td>${memberNameById(h.member_id)}</td>
-        <td class="tdMoney">${money(h.amount || 0)}</td>
-        <td>${h.note || h.details || "—"}</td>
-      </tr>
-    `).join(""),
-    5
-  );
-
-  renderTable(
-    "tbFoundation",
-    foundationPayments.slice(0, 200).map(fp => `
-      <tr>
-        <td>${safeDate(fp.created_at || fp.date)}</td>
-        <td>${memberNameById(fp.member_id)}</td>
-        <td class="tdMoney">${money(fp.amount || 0)}</td>
-        <td class="tdCenter">${badgeStatus(fp.status || "pending")}</td>
-      </tr>
-    `).join(""),
-    4
-  );
-
-  renderKPIs();
-  renderCharts();
-}
-
-async function reloadAll(){
-  sideErr("");
-
-  const st = await safeSingle("app_state");
-  if(st) appState = st;
-
-  members = await safeSelect("members", ["created_at"]);
-  contributions = await safeSelect("contributions", ["created_at", "date"]);
-  loans = await safeSelect("loans", ["issued_at", "created_at"]);
-  fines = await safeSelect("fines", ["created_at", "date"]);
-  payouts = await safeSelect("payouts", ["created_at", "date"]);
-  history = await safeSelect("history", ["created_at", "date"]);
-  foundationPayments = await safeSelect("foundation_payments", ["created_at", "date"]);
-
-  const next = members[appState.next_payout_index || 0];
-  document.getElementById("nextName").textContent = next ? (next.name || next.email || "—") : "—";
-  document.getElementById("nextInfo").textContent = `Next payout date: ${appState.next_payout_date || "—"}`;
-
-  renderAll();
-  toast("Data refreshed");
-}
-
-async function runPayout(){
-  if(!window.isAdmin){
-    toast("Only admin can run payout.");
-    return;
-  }
-  toast("Run Payout: connect this to your payout function/logic.");
-}
-
-/* ===========================
-   WIRE UI
-=========================== */
-function wireUI(){
+document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("tabSignIn").addEventListener("click", ()=>setAuthMode("signin"));
   document.getElementById("tabSignUp").addEventListener("click", ()=>setAuthMode("signup"));
-
-  document.getElementById("btnAuth").addEventListener("click", ()=>{
-    if(AUTH_MODE === "signup") return signUp();
-    return signIn();
-  });
+  document.getElementById("btnAuth").addEventListener("click", ()=> AUTH_MODE === "signup" ? signUp() : signIn());
+  document.getElementById("btnLogout").addEventListener("click", signOut);
 
   document.getElementById("password").addEventListener("keydown", (e)=>{
-    if(e.key === "Enter"){
-      if(AUTH_MODE === "signup") return signUp();
-      return signIn();
-    }
+    if(e.key === "Enter") (AUTH_MODE === "signup" ? signUp() : signIn());
   });
 
-  document.getElementById("navDash").addEventListener("click", ()=>{ setActiveNav("navDash"); show("dash","Dashboard"); });
-  document.getElementById("navMembers").addEventListener("click", ()=>{ setActiveNav("navMembers"); show("members","Members"); });
-  document.getElementById("navContrib").addEventListener("click", ()=>{ setActiveNav("navContrib"); show("contrib","Contributions"); });
-  document.getElementById("navLoans").addEventListener("click", ()=>{ setActiveNav("navLoans"); show("loans","Loans"); });
-  document.getElementById("navFines").addEventListener("click", ()=>{ setActiveNav("navFines"); show("fines","Fines"); });
-  document.getElementById("navPayouts").addEventListener("click", ()=>{ setActiveNav("navPayouts"); show("payouts","Payouts"); });
-  document.getElementById("navHistory").addEventListener("click", ()=>{ setActiveNav("navHistory"); show("history","History"); });
-  document.getElementById("navFPayments").addEventListener("click", ()=>{ setActiveNav("navFPayments"); show("foundation_payments","Foundation Payments"); });
-
-  document.getElementById("btnLogout").addEventListener("click", signOut);
-  document.getElementById("btnRefresh").addEventListener("click", reloadAll);
-  document.getElementById("btnRunPayout").addEventListener("click", runPayout);
-
   setAuthMode("signin");
-}
 
-/* ===========================
-   INIT
-=========================== */
-sb.auth.onAuthStateChange(async () => {
-  const ok = await enforceAdminGate();
-  if(ok) await reloadAll();
-});
-
-document.addEventListener("DOMContentLoaded", async () => {
-  wireUI();
-  const ok = await enforceAdminGate();
-  if(ok) await reloadAll();
+  // If already signed in, go straight in
+  try{
+    const ok = await enforceAdminGate();
+    if(ok) toast("Session restored");
+  }catch(e){
+    console.warn("Auto gate check:", e?.message || e);
+  }
 });
 </script>
 
