@@ -52,7 +52,10 @@
       padding:11px 14px;border-radius:14px;border:1px solid rgba(31,75,153,.35);
       background: linear-gradient(135deg, rgba(42,106,223,.20), rgba(20,184,166,.12));
       color:var(--text);cursor:pointer;box-shadow:var(--shadow2);font-weight:700;
+      transition: transform .06s ease, filter .10s ease;
     }
+    .btn:hover{filter:brightness(1.03)}
+    .btn:active{transform: translateY(1px)}
     .btn.ghost{background:var(--card2);box-shadow:none;border-color:var(--border);}
     .btn.primary{background: linear-gradient(135deg, rgba(31,75,153,.98), rgba(42,106,223,.95));color:#fff;border-color: rgba(31,75,153,.30);}
     .btn:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
@@ -87,17 +90,30 @@
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
     .tableWrap{overflow:auto;border-radius:14px;border:1px solid var(--border);margin-top:10px}
-    table{width:100%;border-collapse:separate;border-spacing:0;min-width:720px;background:var(--card)}
+    table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px;background:var(--card)}
     th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-size:12px;}
     th{color:var(--muted);font-weight:900;background:#1f2937;position:sticky; top:0; z-index:1;}
     tbody tr:nth-child(even) td{background:#19213a}
-
     .tdMoney{text-align:right;font-variant-numeric: tabular-nums;}
+
     .badge{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:900;border:1px solid transparent;}
     .b-pending{color:#f59e0b;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.25)}
     .b-active{color:#60a5fa;background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.25)}
     .b-paid{color:#34d399;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.25)}
     .b-unknown{color:#cbd5e1;background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.22)}
+
+    .miniBox{
+      margin-top:10px;
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:var(--card2);
+    }
+    .bigName{font-weight:1000;font-size:18px;margin-top:6px}
+    .smallRow{display:flex;justify-content:space-between;gap:10px;margin-top:8px}
+    .smallRow span{color:var(--muted);font-size:12px}
+    .smallRow b{color:var(--text)}
+
     #toast{
       position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
       background:rgba(15,23,42,.92);color:#fff;padding:10px 14px;border-radius:14px;
@@ -105,9 +121,10 @@
     }
 
     @media (max-width:1100px){ .grid4{grid-template-columns:1fr 1fr} .grid2{grid-template-columns:1fr} }
-    @media (max-width:740px){ .wrap{flex-direction:column} .sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border)} table{min-width:640px} }
+    @media (max-width:740px){ .wrap{flex-direction:column} .sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border)} table{min-width:680px} }
   </style>
 </head>
+
 <body>
 
 <!-- LOGIN -->
@@ -151,18 +168,53 @@
     </div>
 
     <div class="nav">
-      <button id="navDash" class="active" type="button" data-sec="dash">Dashboard</button>
-      <button id="navMembers" type="button" data-sec="members" data-admin="1">Members</button>
-      <button id="navContrib" type="button" data-sec="contrib" data-admin="1">Contributions</button>
-      <button id="navLoans" type="button" data-sec="loans">Loans</button>
-      <button id="navPayouts" type="button" data-sec="payouts" data-admin="1">Payouts</button>
+      <button class="active" type="button" data-sec="dash">Dashboard</button>
+      <button type="button" data-sec="members" data-admin="1">Members</button>
+      <button type="button" data-sec="contrib" data-admin="1">Contributions</button>
+      <button type="button" data-sec="loans">Loans</button>
+      <button type="button" data-sec="payouts" data-admin="1">Payouts</button>
       <button class="btn ghost" style="margin-top:6px" type="button" id="btnRefresh">Refresh</button>
+    </div>
+
+    <!-- ✅ ROTATION CARD -->
+    <div class="card">
+      <div class="row">
+        <div style="font-weight:900">Rotation Payout</div>
+        <span class="pill" id="rotRolePill">—</span>
+      </div>
+
+      <div class="miniBox">
+        <div class="sub">Current Beneficiary (Next)</div>
+        <div class="bigName" id="nextBeneficiary">—</div>
+
+        <div class="smallRow">
+          <span>Position</span>
+          <b id="nextPosition">—</b>
+        </div>
+
+        <div class="smallRow">
+          <span>Next payout date</span>
+          <b id="nextPayoutDate">—</b>
+        </div>
+
+        <div class="smallRow">
+          <span>Expected payout</span>
+          <b id="expectedPayout">$0</b>
+        </div>
+      </div>
+
+      <button class="btn primary" style="width:100%;margin-top:10px" type="button" id="btnRunPayout">
+        Run Payout Now
+      </button>
+      <div class="sub" style="margin-top:10px">
+        Uses <b>members.position</b> ordering + <b>app_state.next_payout_index</b>.
+      </div>
     </div>
 
     <div class="card">
       <div class="sub"><b>Foundation Pot</b> (app_state.foundation)</div>
       <div style="margin-top:8px;font-weight:1000;font-size:18px" id="foundationPot">$0</div>
-      <div class="sub" style="margin-top:10px">This is not a table; it’s a column in <b>app_state</b>.</div>
+      <div class="sub" style="margin-top:10px">This is a column in <b>app_state</b> (not a separate “foundation” table).</div>
     </div>
   </aside>
 
@@ -211,7 +263,7 @@
       </div>
     </section>
 
-    <!-- MEMBERS (ADMIN) -->
+    <!-- MEMBERS -->
     <section id="members" class="section">
       <div class="grid2">
         <div class="card">
@@ -238,12 +290,12 @@
         </div>
 
         <div class="card">
-          <div class="row"><div style="font-weight:900">Member List</div><span class="pill" id="memberCountPill">0</span></div>
+          <div class="row"><div style="font-weight:900">Member List (sorted by position)</div><span class="pill" id="memberCountPill">0</span></div>
           <div class="tableWrap">
             <table>
               <thead>
                 <tr>
-                  <th>Name</th><th>Email</th>
+                  <th>Pos</th><th>Name</th><th>Email</th>
                   <th class="tdMoney">Contrib</th>
                   <th class="tdMoney">Foundation</th>
                   <th class="tdMoney">Loan Due</th>
@@ -257,7 +309,7 @@
       </div>
     </section>
 
-    <!-- CONTRIBUTIONS (ADMIN) -->
+    <!-- CONTRIBUTIONS -->
     <section id="contrib" class="section">
       <div class="grid2">
         <div class="card">
@@ -276,7 +328,7 @@
       </div>
     </section>
 
-    <!-- LOANS (Admin approve, Member request) -->
+    <!-- LOANS -->
     <section id="loans" class="section">
       <div class="grid2">
         <div class="card">
@@ -322,13 +374,15 @@
       </div>
     </section>
 
-    <!-- PAYOUTS (ADMIN) -->
+    <!-- PAYOUTS -->
     <section id="payouts" class="section">
       <div class="grid2">
         <div class="card">
           <div style="font-weight:900">Run Payout (Admin)</div>
-          <div class="sub">This inserts into payouts and updates members.payout_total and app_state rotation.</div>
-          <button class="btn primary" type="button" id="btnRunPayout" style="width:100%;margin-top:10px;">Run Payout Now</button>
+          <div class="sub">Also updates member payout_total + app_state next index/date.</div>
+          <button class="btn primary" type="button" id="btnRunPayout2" style="width:100%;margin-top:10px;">
+            Run Payout Now
+          </button>
         </div>
         <div class="card">
           <div class="row"><div style="font-weight:900">Payout History</div><span class="pill">Latest</span></div>
@@ -352,13 +406,13 @@
    SUPABASE CONFIG
 ========================= */
 const SUPABASE_URL = "https://ficlrtvrrzfiakmciwel.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI"; // <-- keep your real key here
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI"; // <-- paste your real anon key
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
 });
 
 /* =========================
-   BUSINESS CONSTANTS
+   CONSTANTS
 ========================= */
 const INTEREST_RATE = 0.05;
 const FOUNDATION_FACTOR = 0.70;
@@ -379,7 +433,7 @@ let profiles = [];
 let histChart = null;
 
 /* =========================
-   UI HELPERS
+   HELPERS
 ========================= */
 const $ = (id) => document.getElementById(id);
 
@@ -408,10 +462,6 @@ function badge(status){
   if(s==="paid"||s==="paid_off") return `<span class="badge b-paid">Paid</span>`;
   return `<span class="badge b-unknown">${status||"—"}</span>`;
 }
-
-/* =========================
-   NAV
-========================= */
 function showSection(sec, title, hint){
   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
   $(sec).classList.add("active");
@@ -444,7 +494,12 @@ async function enforceGate(){
   const user = data?.user;
   if(!user) return false;
 
-  const pr = await sb.from("profiles").select("role, approved, member_id").eq("id", user.id).maybeSingle();
+  const pr = await sb
+    .from("profiles")
+    .select("role, approved, member_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
   if(pr.error) throw pr.error;
   if(!pr.data) throw new Error("No profiles row for this user.");
 
@@ -463,13 +518,21 @@ async function enforceGate(){
   $("role").textContent = pr.data.role || "member";
   $("today").textContent = new Date().toLocaleDateString();
 
-  // Hide admin-only nav for members
+  // admin-only nav
   document.querySelectorAll("[data-admin='1']").forEach(b=>{
     b.style.display = isAdmin ? "block" : "none";
   });
+
+  $("rotRolePill").textContent = isAdmin ? "Admin" : "Member";
+
+  // payout buttons disabled for members
+  $("btnRunPayout").disabled = !isAdmin;
+  $("btnRunPayout2").disabled = !isAdmin;
+
+  // interest mini pill visible only admin
   $("kInterestMini").parentElement.style.display = isAdmin ? "inline-flex" : "none";
 
-  // Loan form mode
+  // loan label
   if(isAdmin){
     $("loanFormTitle").textContent = "Approve / Manage Loans (Admin)";
     $("loanFormHint").textContent = "Members request loans (pending). Admin approves → active.";
@@ -484,7 +547,7 @@ async function enforceGate(){
 }
 
 /* =========================
-   SIGN IN / SIGN UP
+   SIGN IN / SIGN UP / OUT
 ========================= */
 async function signIn(){
   lockErr(""); sideErr("");
@@ -530,8 +593,19 @@ async function signOut(){
 }
 
 /* =========================
-   LOAD ALL
+   LOAD ALL (with contributions fallback)
 ========================= */
+async function loadContributions(){
+  // Try with kind filter (if your table has kind)
+  let c = await sb.from("contributions").select("member_id, amount").eq("kind","contribution").limit(5000);
+  if(!c.error) return c.data || [];
+
+  // Fallback: table may not have "kind"
+  c = await sb.from("contributions").select("member_id, amount").limit(5000);
+  if(c.error) throw c.error;
+  return c.data || [];
+}
+
 async function reloadAll(){
   sideErr("");
 
@@ -543,12 +617,12 @@ async function reloadAll(){
   if(m.error) return sideErr("members: " + m.error.message);
   members = m.data || [];
 
-  // contributions (for KPI + histogram)
-  const c = await sb.from("contributions").select("member_id, amount").eq("kind", "contribution").limit(5000);
-  if(c.error) return sideErr("contributions: " + c.error.message);
-  contributions = c.data || [];
+  try{
+    contributions = await loadContributions();
+  }catch(e){
+    return sideErr("contributions: " + (e?.message || String(e)));
+  }
 
-  // loans + payouts (RLS will automatically filter members)
   const l = await sb.from("loans").select("*").order("created_at", { ascending:false }).limit(300);
   if(l.error) return sideErr("loans: " + l.error.message);
   loans = l.data || [];
@@ -557,7 +631,6 @@ async function reloadAll(){
   if(p.error) return sideErr("payouts: " + p.error.message);
   payouts = p.data || [];
 
-  // profiles only admin needs
   if(isAdmin){
     const pr = await sb.from("profiles").select("id, role, approved, member_id");
     if(pr.error) return sideErr("profiles: " + pr.error.message);
@@ -570,7 +643,29 @@ async function reloadAll(){
 }
 
 /* =========================
-   RENDER
+   ELIGIBILITY
+========================= */
+function memberTotal(memberId){
+  const m = members.find(x=>String(x.id)===String(memberId));
+  if(!m) return 0;
+  const cSum = contributions
+    .filter(r=>String(r.member_id)===String(memberId))
+    .reduce((s,r)=>s+Number(r.amount||0),0);
+  const f = Number(m.foundation_contrib||0);
+  return cSum + (f * FOUNDATION_FACTOR);
+}
+function eligible(borrowerId, suretyId, amt){
+  const a = Number(amt||0);
+  if(a<=0) return {ok:false, reason:"Invalid amount"};
+  const bTot = memberTotal(borrowerId);
+  if(bTot >= a) return {ok:true, reason:"Eligible (self)"};
+  const sTot = memberTotal(suretyId);
+  if((bTot + sTot) >= a) return {ok:true, reason:"Eligible (with surety)"};
+  return {ok:false, reason:"Not eligible"};
+}
+
+/* =========================
+   RENDER (includes rotation card)
 ========================= */
 function renderAll(){
   // totals
@@ -579,7 +674,6 @@ function renderAll(){
     const k = String(r.member_id);
     totalsByMember[k] = (totalsByMember[k]||0) + Number(r.amount||0);
   }
-
   const potSum = Object.values(totalsByMember).reduce((s,v)=>s+v,0);
   const outstanding = (members||[]).reduce((s,m)=>s+Number(m.loan_due||0),0);
 
@@ -591,9 +685,19 @@ function renderAll(){
   $("memberCountPill").textContent = String(members.length);
   $("kInterestMini").textContent = money(appState.total_interest_generated||0);
 
-  // member table
+  // ✅ rotation info
+  $("expectedPayout").textContent = money(potSum);
+  const idx = Number(appState.next_payout_index || 0);
+  const nextIndex = members.length ? (idx % members.length) : 0;
+  const next = members.length ? members[nextIndex] : null;
+  $("nextBeneficiary").textContent = next ? (next.name || "—") : "—";
+  $("nextPosition").textContent = next ? String(next.position ?? (nextIndex+1)) : "—";
+  $("nextPayoutDate").textContent = appState.next_payout_date ? String(appState.next_payout_date) : "—";
+
+  // member table (sorted by position)
   $("memberBody").innerHTML = (members||[]).map(m=>`
     <tr>
+      <td>${m.position ?? ""}</td>
       <td>${m.name||""}</td>
       <td>${m.email||""}</td>
       <td class="tdMoney">${money(totalsByMember[String(m.id)]||0)}</td>
@@ -601,7 +705,7 @@ function renderAll(){
       <td class="tdMoney">${money(m.loan_due||0)}</td>
       <td class="tdMoney">${money(m.payout_total||0)}</td>
     </tr>
-  `).join("") || `<tr><td colspan="6" class="sub">No members</td></tr>`;
+  `).join("") || `<tr><td colspan="7" class="sub">No members</td></tr>`;
 
   // dropdowns
   const optsAll = (members||[]).map(m=>`<option value="${m.id}">${m.name}</option>`).join("");
@@ -609,7 +713,7 @@ function renderAll(){
   $("lBorrower").innerHTML = optsAll;
   $("lSurety").innerHTML = optsAll;
 
-  // If member: lock borrower to their member_id
+  // member locks borrower
   if(!isAdmin && currentMemberId != null){
     $("lBorrower").value = String(currentMemberId);
     $("lBorrower").disabled = true;
@@ -617,7 +721,7 @@ function renderAll(){
     $("lBorrower").disabled = false;
   }
 
-  // Approvals table (admin)
+  // approvals (admin)
   if(isAdmin){
     const pending = profiles.filter(p=>p.role==="member" && !p.approved && p.member_id != null);
     const byId = Object.fromEntries(members.map(m=>[String(m.id), m]));
@@ -633,7 +737,7 @@ function renderAll(){
     $("approveBody").innerHTML = `<tr><td colspan="3" class="sub">Admin only</td></tr>`;
   }
 
-  // Loans table
+  // loans
   $("loanBody").innerHTML = (loans||[]).map(r=>{
     const canApprove = isAdmin && String(r.status||"").toLowerCase()==="pending";
     const action = canApprove
@@ -651,7 +755,7 @@ function renderAll(){
     </tr>`;
   }).join("") || `<tr><td colspan="8" class="sub">No loans</td></tr>`;
 
-  // Payouts table
+  // payouts
   $("payoutBody").innerHTML = (payouts||[]).map(x=>`
     <tr>
       <td>${x.payout_date||""}</td>
@@ -660,7 +764,7 @@ function renderAll(){
     </tr>
   `).join("") || `<tr><td colspan="3" class="sub">No payouts</td></tr>`;
 
-  // Histogram (all members)
+  // histogram
   const labels = (members||[]).map(m=>m.name||"");
   const data = (members||[]).map(m=> totalsByMember[String(m.id)] || 0);
 
@@ -671,36 +775,12 @@ function renderAll(){
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ display:false }},
-      scales:{ x:{ ticks:{ color:"#e5e7eb", autoSkip:false, maxRotation:60 }},
-              y:{ ticks:{ color:"#e5e7eb" }, beginAtZero:true } }
+      scales:{
+        x:{ ticks:{ color:"#e5e7eb", autoSkip:false, maxRotation:60 }},
+        y:{ ticks:{ color:"#e5e7eb" }, beginAtZero:true }
+      }
     }
   });
-}
-
-/* =========================
-   BUSINESS: Eligibility Rule (from your prompt)
-   member_total = contrib + (foundation * 0.70)
-   eligible self if member_total >= requested
-   else eligible w surety if (member_total + surety_total) >= requested
-========================= */
-function memberTotal(memberId){
-  const m = members.find(x=>String(x.id)===String(memberId));
-  if(!m) return 0;
-  // contributions total:
-  const cSum = contributions
-    .filter(r=>String(r.member_id)===String(memberId))
-    .reduce((s,r)=>s+Number(r.amount||0),0);
-  const f = Number(m.foundation_contrib||0);
-  return cSum + (f * FOUNDATION_FACTOR);
-}
-function eligible(borrowerId, suretyId, amt){
-  const a = Number(amt||0);
-  if(a<=0) return {ok:false, reason:"Invalid amount"};
-  const bTot = memberTotal(borrowerId);
-  if(bTot >= a) return {ok:true, reason:"Eligible (self)"};
-  const sTot = memberTotal(suretyId);
-  if((bTot + sTot) >= a) return {ok:true, reason:"Eligible (with surety)"};
-  return {ok:false, reason:"Not eligible"};
 }
 
 /* =========================
@@ -740,7 +820,11 @@ async function addContribution(){
   if(amount<=0) return toast("Enter amount");
   if(amount % 500 !== 0) return toast("Must be multiple of 500");
 
-  const ins = await sb.from("contributions").insert([{ member_id, amount, kind:"contribution" }]);
+  // try insert with kind; fallback without kind
+  let ins = await sb.from("contributions").insert([{ member_id, amount, kind:"contribution" }]);
+  if(ins.error){
+    ins = await sb.from("contributions").insert([{ member_id, amount }]);
+  }
   if(ins.error) return toast(ins.error.message);
 
   $("cAmount").value="";
@@ -770,9 +854,7 @@ async function requestLoan(){
     borrower_name: borrower?.name || "",
     surety_member_id,
     surety_name: surety?.name || "",
-    principal,
-    interest,
-    total_due,
+    principal, interest, total_due,
     status: "pending",
     created_at: new Date().toISOString()
   }]);
@@ -809,22 +891,18 @@ async function createActiveLoanAdmin(){
     borrower_name: borrower?.name || "",
     surety_member_id,
     surety_name: surety?.name || "",
-    principal,
-    interest,
-    total_due,
+    principal, interest, total_due,
     status: "active",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }]);
   if(ins.error) return toast(ins.error.message);
 
-  // update borrower loan_due
   const upM = await sb.from("members").update({
     loan_due: Number(borrower?.loan_due||0) + total_due
   }).eq("id", borrower_member_id);
   if(upM.error) return toast("members update: " + upM.error.message);
 
-  // deduct foundation
   const upS = await sb.from("app_state").update({
     foundation: foundation - principal,
     total_interest_generated: Number(appState.total_interest_generated||0) + interest,
@@ -853,21 +931,18 @@ async function approveLoan(loanId){
 
   if(principal > foundation) return toast("Not enough foundation to approve");
 
-  // set active
   const upLoan = await sb.from("loans").update({
     status:"active",
     updated_at:new Date().toISOString()
   }).eq("id", loanId);
   if(upLoan.error) return toast("approve: " + upLoan.error.message);
 
-  // borrower loan_due
   const borrower = members.find(m=>String(m.id)===String(loan.borrower_member_id));
   const upM = await sb.from("members").update({
     loan_due: Number(borrower?.loan_due||0) + total_due
   }).eq("id", loan.borrower_member_id);
   if(upM.error) return toast("members: " + upM.error.message);
 
-  // deduct foundation
   const upS = await sb.from("app_state").update({
     foundation: foundation - principal,
     total_interest_generated: Number(appState.total_interest_generated||0) + interest,
@@ -897,7 +972,6 @@ async function runPayout(){
   const payMember = members[payIndex];
   const payout_date = (appState.next_payout_date || new Date().toISOString().slice(0,10));
 
-  // insert payout
   const ins = await sb.from("payouts").insert([{
     member_id: payMember.id,
     member_name: payMember.name,
@@ -907,13 +981,12 @@ async function runPayout(){
   }]);
   if(ins.error) return toast(ins.error.message);
 
-  // update member payout_total
   const upM = await sb.from("members").update({
     payout_total: Number(payMember.payout_total||0) + potSum
   }).eq("id", payMember.id);
   if(upM.error) return toast("member payout_total: " + upM.error.message);
 
-  // advance app_state (14 days + index)
+  // advance 14 days + index
   const d = new Date(payout_date + "T00:00:00");
   d.setDate(d.getDate() + 14);
   const nextDate = d.toISOString().slice(0,10);
@@ -956,7 +1029,10 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   // admin actions
   $("btnAddMember").onclick = addMember;
   $("btnAddContrib").onclick = addContribution;
+
+  // payout buttons (both)
   $("btnRunPayout").onclick = runPayout;
+  $("btnRunPayout2").onclick = runPayout;
 
   // loan action depends on role
   $("btnLoanAction").onclick = async ()=>{
@@ -978,5 +1054,6 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   }
 });
 </script>
+
 </body>
 </html>
