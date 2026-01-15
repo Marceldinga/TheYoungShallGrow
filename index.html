@@ -1,608 +1,648 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>The Young Shall Grow – Njangi Dashboard</title>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>The Young Shall Grow – Njangi Dashboard</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <style>
     :root{
-      --bg:#0b1220; --card:#151c2f; --text:#e5e7eb; --muted:#9ca3af;
-      --accent:#22c55e; --danger:#ef4444; --border:#253056;
+      --bg:#0b1220; --panel:#111827; --card:#151c2f; --card2:#1b2440;
+      --text:#e5e7eb; --muted:#9ca3af; --border:#253056;
+      --green:#22c55e; --blue:#2a6adf; --danger:#ef4444;
+      --shadow: 0 14px 40px rgba(0,0,0,.35);
+      --radius:14px;
     }
-    body{ font-family: Arial, sans-serif; background:var(--bg); color:var(--text); padding:18px; }
-    h1,h2,h3{ color:var(--accent); margin: 8px 0; }
-    .grid{ display:grid; gap:14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-    .card{ background:var(--card); border:1px solid var(--border); padding:16px; border-radius:12px; }
-    input, select, button, textarea{
-      padding:10px; margin:6px 0; width:100%; box-sizing:border-box;
-      background:#0f172a; color:var(--text); border:1px solid var(--border); border-radius:10px;
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1200px 500px at 20% -10%, rgba(42,106,223,.35), transparent 60%),
+                  radial-gradient(1000px 500px at 80% -20%, rgba(34,197,94,.25), transparent 55%),
+                  var(--bg);
+      color:var(--text);
     }
-    textarea{ min-height: 70px; resize: vertical; }
-    button{ background:var(--accent); border:none; color:#08120b; cursor:pointer; font-weight:700; }
-    button:hover{ opacity:0.9; }
-    .btnRow{ display:flex; gap:10px; }
-    .btnRow > button{ width:100%; }
-    .muted{ color:var(--muted); font-size: 0.92rem; }
-    .pill{ display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
-    .hide{ display:none !important; }
-    table{ width:100%; border-collapse:collapse; margin-top:8px; font-size:0.92rem; }
-    th, td{ border-bottom:1px solid var(--border); padding:8px; text-align:left; vertical-align: top; }
-    th{ color: var(--muted); font-weight:700; }
-    .ok{ color: var(--accent); }
-    .err{ color: var(--danger); }
-    canvas{ width:100% !important; height:260px !important; }
-    .small{ font-size: 0.9rem; }
-    .topbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+    .wrap{ max-width:1200px; margin:0 auto; padding:22px; }
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      margin-bottom:16px;
+    }
+    .brand{
+      display:flex; flex-direction:column; gap:2px;
+    }
+    .brand h1{ margin:0; font-size:20px; letter-spacing:-.02em; }
+    .brand p{ margin:0; color:var(--muted); font-size:13px; }
+
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border:1px solid var(--border); border-radius:999px;
+      background: rgba(17,24,39,.6);
+    }
+    .dot{ width:8px; height:8px; border-radius:50%; background:var(--danger); }
+    .dot.ok{ background:var(--green); }
+
+    .card{
+      background: linear-gradient(180deg, rgba(27,36,64,.9), rgba(17,24,39,.7));
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding:16px;
+      margin-bottom:14px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap:12px;
+    }
+    .col-12{ grid-column: span 12; }
+    .col-8{ grid-column: span 8; }
+    .col-6{ grid-column: span 6; }
+    .col-4{ grid-column: span 4; }
+    .col-3{ grid-column: span 3; }
+
+    @media (max-width: 980px){
+      .col-8,.col-6,.col-4,.col-3{ grid-column: span 12; }
+    }
+
+    h2{ margin:0 0 10px; font-size:16px; color:var(--green); }
+    h3{ margin:14px 0 8px; font-size:14px; color:#cfe7ff; font-weight:600; }
+
+    .row{ display:flex; gap:10px; flex-wrap:wrap; }
+    .row > *{ flex:1; min-width:180px; }
+
+    input, select{
+      width:100%;
+      padding:10px 11px;
+      border-radius: 10px;
+      border:1px solid var(--border);
+      background: rgba(11,18,32,.65);
+      color:var(--text);
+      outline:none;
+    }
+    input::placeholder{ color:#7c879b; }
+
+    button{
+      width:100%;
+      padding:10px 12px;
+      border-radius: 10px;
+      border:1px solid rgba(34,197,94,.35);
+      background: linear-gradient(180deg, rgba(34,197,94,.95), rgba(34,197,94,.75));
+      color:#06210f;
+      font-weight:700;
+      cursor:pointer;
+      transition: transform .08s ease, opacity .15s ease;
+    }
+    button:hover{ opacity:.92; }
+    button:active{ transform: translateY(1px); }
+    button.secondary{
+      background: rgba(42,106,223,.18);
+      border:1px solid rgba(42,106,223,.40);
+      color:#dbeafe;
+      font-weight:650;
+    }
+    button.danger{
+      background: rgba(239,68,68,.18);
+      border:1px solid rgba(239,68,68,.40);
+      color:#fee2e2;
+      font-weight:650;
+    }
+
+    .tabs{
+      display:flex; gap:8px; flex-wrap:wrap;
+      padding:8px; border:1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(17,24,39,.55);
+      margin-bottom:14px;
+    }
+    .tab{
+      padding:9px 12px;
+      border-radius: 10px;
+      border:1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      cursor:pointer;
+      font-weight:650;
+    }
+    .tab.active{
+      color: var(--text);
+      border-color: rgba(42,106,223,.45);
+      background: rgba(42,106,223,.16);
+    }
+
+    .kpis{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:12px;
+    }
+    @media (max-width: 980px){ .kpis{ grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px){ .kpis{ grid-template-columns: 1fr; } }
+
+    .kpi{
+      border:1px solid var(--border);
+      background: rgba(11,18,32,.55);
+      border-radius: 14px;
+      padding:12px;
+    }
+    .kpi .label{ color: var(--muted); font-size:12px; }
+    .kpi .value{ margin-top:4px; font-size:18px; font-weight:800; letter-spacing:-.02em; }
+
+    .muted{ color: var(--muted); font-size:13px; }
+
+    /* Tables */
+    .tableGrid{
+      display:grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap:12px;
+    }
+    .tbox{
+      grid-column: span 6;
+      border:1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(11,18,32,.45);
+      overflow:hidden;
+      min-height: 260px;
+      display:flex;
+      flex-direction:column;
+    }
+    @media (max-width: 980px){ .tbox{ grid-column: span 12; } }
+
+    .tboxHead{
+      padding:10px 12px;
+      border-bottom:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      background: rgba(17,24,39,.55);
+    }
+    .tboxHead strong{ color:#dbeafe; font-size:13px; }
+    .tboxBody{ overflow:auto; padding:10px 12px; max-height: 360px; }
+
+    table{ width:100%; border-collapse:collapse; font-size:12px; }
+    th, td{
+      padding:8px 8px;
+      border-bottom:1px solid rgba(37,48,86,.55);
+      text-align:left;
+      vertical-align:top;
+      white-space:nowrap;
+    }
+    th{
+      position:sticky; top:0;
+      background: rgba(21,28,47,.95);
+      color:#cfe7ff;
+      z-index:1;
+    }
+
+    .hide{ display:none; }
   </style>
 </head>
 
 <body>
+  <div class="wrap">
 
-<h1>The Young Shall Grow – Njangi Dashboard</h1>
-<div class="topbar">
-  <span class="pill">Single-file HTML</span>
-  <span class="pill" id="rolePill">Role: --</span>
-  <span class="pill" id="memberPill">Member ID: --</span>
-</div>
-
-<!-- LOGIN -->
-<div class="card" id="loginCard">
-  <h2>Login</h2>
-  <input id="email" placeholder="Email" autocomplete="username">
-  <input id="password" type="password" placeholder="Password" autocomplete="current-password">
-  <div class="btnRow">
-    <button onclick="login()">Login</button>
-    <button onclick="logout()" style="background:#94a3b8;">Logout</button>
-  </div>
-  <p id="loginStatus" class="muted"></p>
-</div>
-
-<!-- DASHBOARD -->
-<div id="dashboard" class="hide">
-
-  <!-- STATS -->
-  <div class="grid">
-    <div class="card">
-      <h2>System Stats</h2>
-      <p class="small">Pot Amount: <b id="potAmount">--</b></p>
-      <p class="small">Your Total Value: <b id="myValue">--</b></p>
-      <p class="muted" id="rlsNote">Tables and charts show what your RLS allows you to read.</p>
-      <div class="btnRow">
-        <button onclick="refreshAll()">Refresh</button>
-        <button onclick="runRulesQuick()" style="background:#f59e0b;">Run Rules (Admin)</button>
+    <div class="topbar">
+      <div class="brand">
+        <h1>The Young Shall Grow – Njangi</h1>
+        <p>Clean dashboard (Supabase handles all rules & totals)</p>
       </div>
-      <p id="statusMsg" class="muted"></p>
+      <div class="pill">
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText" class="muted">Not logged in</span>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>Charts</h2>
-      <p class="muted">Contributions & Fines (best-effort, depends on RLS).</p>
-      <canvas id="chartContrib"></canvas>
-      <canvas id="chartFine" style="margin-top:14px;"></canvas>
+    <!-- LOGIN -->
+    <div id="loginCard" class="card">
+      <h2>Login</h2>
+      <div class="grid">
+        <div class="col-6"><input id="email" placeholder="Email"></div>
+        <div class="col-6"><input id="password" type="password" placeholder="Password"></div>
+        <div class="col-6"><button onclick="login()">Login</button></div>
+        <div class="col-6"><button class="secondary" onclick="logout()">Logout</button></div>
+        <div class="col-12"><div id="loginStatus" class="muted"></div></div>
+      </div>
     </div>
-  </div>
 
-  <!-- ADMIN ACTIONS -->
-  <div class="card" id="adminCard">
-    <h2>Admin Actions</h2>
-    <p class="muted">This section is hidden for members. Admin is detected using <b>is_admin()</b>.</p>
+    <!-- TABS -->
+    <div id="appTabs" class="tabs hide">
+      <button class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
+      <button class="tab" data-tab="member" onclick="switchTab('member')">Member</button>
+      <button class="tab" data-tab="admin" id="adminTabBtn" onclick="switchTab('admin')">Admin</button>
+      <button class="tab" data-tab="tables" onclick="switchTab('tables')">Tables</button>
+    </div>
 
-    <div class="grid">
-      <div>
-        <h3>Add Member (table insert)</h3>
+    <!-- OVERVIEW -->
+    <div id="tab_overview" class="card hide">
+      <h2>Overview</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Pot Amount</div><div class="value" id="potAmount">--</div></div>
+        <div class="kpi"><div class="label">My Total Value</div><div class="value" id="myValue">--</div></div>
+        <div class="kpi"><div class="label">My Member ID</div><div class="value" id="myMemberId">--</div></div>
+        <div class="kpi"><div class="label">Role</div><div class="value" id="myRole">--</div></div>
+      </div>
+      <div style="margin-top:10px" class="muted">
+        Tip: Click <b>Tables</b> to view all records your RLS allows. Admin can also insert using the Admin tab.
+      </div>
+    </div>
+
+    <!-- MEMBER -->
+    <div id="tab_member" class="card hide">
+      <h2>Member Actions</h2>
+
+      <h3>Request Loan</h3>
+      <div class="row">
+        <input id="loan_borrower" placeholder="Your Member ID (bigint)">
+        <input id="loan_surety" placeholder="Surety Member ID (bigint)">
+        <input id="loan_amount" type="number" placeholder="Amount">
+      </div>
+      <button onclick="requestLoan()">Request Loan</button>
+
+      <h3 style="margin-top:16px;">Pay Interest (if you use it)</h3>
+      <div class="row">
+        <input id="pi_loan_id" placeholder="Loan ID (uuid)">
+        <input id="pi_amount" type="number" placeholder="Amount">
+      </div>
+      <button class="secondary" onclick="payInterest()">Pay Interest</button>
+    </div>
+
+    <!-- ADMIN -->
+    <div id="tab_admin" class="card hide">
+      <h2>Admin Actions</h2>
+      <div class="muted">Admin tab shows only if <b>is_admin()</b> returns true for your logged-in user.</div>
+
+      <h3>Add Member</h3>
+      <div class="row">
         <input id="m_name" placeholder="Name">
         <input id="m_email" placeholder="Email">
         <input id="m_phone" placeholder="Phone">
-        <button onclick="addMember()">Add Member</button>
-        <p class="muted">Note: This inserts into <b>members</b> table only. Creating auth user is separate (Supabase Auth signup/invite).</p>
       </div>
+      <button onclick="addMember()">Add Member</button>
 
-      <div>
-        <h3>Add Contribution (RPC)</h3>
+      <h3>Add Contribution</h3>
+      <div class="row">
         <input id="c_member" placeholder="Member ID (bigint)">
         <input id="c_amount" type="number" placeholder="Amount">
-        <button onclick="addContribution()">Add Contribution</button>
+      </div>
+      <button onclick="addContribution()">Add Contribution</button>
 
-        <h3 style="margin-top:14px;">Add Fine (RPC)</h3>
+      <h3>Add Fine</h3>
+      <div class="row">
         <input id="f_member" placeholder="Member ID (bigint)">
         <input id="f_amount" type="number" placeholder="Amount">
-        <input id="f_reason" placeholder="Reason (text)">
-        <button onclick="addFine()">Add Fine</button>
+        <input id="f_reason" placeholder="Reason">
       </div>
+      <button onclick="addFine()">Add Fine</button>
 
-      <div>
-        <h3>Foundation / Repayment (RPC)</h3>
-        <p class="muted">
-          You only showed one RPC for these: <b>repayments_update_foundation</b>.
-          This code calls it with best-effort payload.
-        </p>
+      <h3>Add Foundation Payment</h3>
+      <div class="row">
         <input id="fp_member" placeholder="Member ID (bigint)">
         <input id="fp_amount" type="number" placeholder="Amount">
-        <div class="btnRow">
-          <button onclick="addFoundation()">Add Foundation Payment</button>
-          <button onclick="addRepayment()" style="background:#38bdf8;">Add Repayment</button>
+      </div>
+      <button onclick="addFoundation()">Add Foundation Payment</button>
+
+      <h3>Add Repayment</h3>
+      <div class="row">
+        <input id="r_member" placeholder="Member ID (bigint)">
+        <input id="r_amount" type="number" placeholder="Amount">
+      </div>
+      <button onclick="addRepayment()">Add Repayment</button>
+
+      <h3>Run System</h3>
+      <div class="row">
+        <button class="secondary" onclick="runPayout()">Run Payout</button>
+        <button class="secondary" onclick="runAllRules()">Run All Njangi Rules</button>
+      </div>
+    </div>
+
+    <!-- TABLES -->
+    <div id="tab_tables" class="card hide">
+      <h2>Tables (Read Only)</h2>
+      <div class="muted">These tables show only what your RLS policies allow.</div>
+
+      <div style="margin:10px 0" class="row">
+        <button class="secondary" onclick="refreshTables()">Refresh Tables</button>
+        <button class="danger" onclick="clearTables()">Clear View</button>
+      </div>
+
+      <div class="tableGrid">
+        <div class="tbox">
+          <div class="tboxHead"><strong>Members</strong><span class="muted" id="count_members">--</span></div>
+          <div class="tboxBody" id="tbl_members"></div>
         </div>
 
-        <h3 style="margin-top:14px;">Pay Interest (RPC)</h3>
-        <input id="pi_loan" placeholder="Loan ID (uuid)">
-        <input id="pi_amount" type="number" placeholder="Amount">
-        <button onclick="payInterest()">Pay Interest</button>
+        <div class="tbox">
+          <div class="tboxHead"><strong>Contributions</strong><span class="muted" id="count_contrib">--</span></div>
+          <div class="tboxBody" id="tbl_contrib"></div>
+        </div>
+
+        <div class="tbox">
+          <div class="tboxHead"><strong>Fines</strong><span class="muted" id="count_fines">--</span></div>
+          <div class="tboxBody" id="tbl_fines"></div>
+        </div>
+
+        <div class="tbox">
+          <div class="tboxHead"><strong>Loans</strong><span class="muted" id="count_loans">--</span></div>
+          <div class="tboxBody" id="tbl_loans"></div>
+        </div>
+
+        <div class="tbox">
+          <div class="tboxHead"><strong>Foundation Payments</strong><span class="muted" id="count_found">--</span></div>
+          <div class="tboxBody" id="tbl_found"></div>
+        </div>
+
+        <div class="tbox">
+          <div class="tboxHead"><strong>Repayments</strong><span class="muted" id="count_repays">--</span></div>
+          <div class="tboxBody" id="tbl_repays"></div>
+        </div>
       </div>
     </div>
 
-    <h3 style="margin-top:14px;">Run System (RPC)</h3>
-    <div class="btnRow">
-      <button onclick="runPayout()">Run Payout</button>
-      <button onclick="runRotationPayout()" style="background:#a78bfa;">Run Rotation Payout</button>
-      <button onclick="runAllRules()" style="background:#f59e0b;">Run All Njangi Rules</button>
-    </div>
   </div>
-
-  <!-- MEMBER LOAN REQUEST -->
-  <div class="card">
-    <h2>Member Loan Request</h2>
-    <p class="muted">
-      Your Member ID is auto-detected using <b>current_member_id()</b>. You only select surety + amount.
-    </p>
-    <input id="loan_surety" placeholder="Surety Member ID (bigint)">
-    <input id="loan_amount" type="number" placeholder="Amount">
-    <button onclick="requestLoan()">Request Loan</button>
-    <p id="loanMsg" class="muted"></p>
-  </div>
-
-  <!-- TABLES -->
-  <div class="card">
-    <h2>Tables (Read Only)</h2>
-    <p class="muted">These tables will show only what your RLS policies allow.</p>
-
-    <div class="grid">
-      <div>
-        <h3>Members</h3>
-        <div id="tbl_members"></div>
-      </div>
-      <div>
-        <h3>Contributions</h3>
-        <div id="tbl_contrib"></div>
-      </div>
-      <div>
-        <h3>Fines</h3>
-        <div id="tbl_fines"></div>
-      </div>
-      <div>
-        <h3>Loans</h3>
-        <div id="tbl_loans"></div>
-      </div>
-      <div>
-        <h3>Foundation Payments</h3>
-        <div id="tbl_foundation"></div>
-      </div>
-      <div>
-        <h3>Repayments</h3>
-        <div id="tbl_repayments"></div>
-      </div>
-    </div>
-  </div>
-
-</div>
 
 <script>
-/* =========================
-   CONFIG
-========================= */
-const SUPABASE_URL = "https://ficlrtvrrzfiakmciwel.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  // =============================
+  // CONFIG
+  // =============================
+  const SUPABASE_URL = "https://ficlrtvrrzfiakmciwel.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let IS_ADMIN = false;
-let MY_MEMBER_ID = null;
+  let sessionUser = null;
+  let isAdmin = false;
 
-let chartContrib = null;
-let chartFine = null;
-
-/* =========================
-   SMALL HELPERS
-========================= */
-function setStatus(msg, ok=true){
-  const el = document.getElementById("statusMsg");
-  el.innerText = msg || "";
-  el.className = ok ? "muted ok" : "muted err";
-}
-
-function renderTable(containerId, rows){
-  const el = document.getElementById(containerId);
-  if(!rows || rows.length === 0){
-    el.innerHTML = `<p class="muted">No rows (or blocked by RLS).</p>`;
-    return;
+  // =============================
+  // UI HELPERS
+  // =============================
+  function setStatus(ok, text){
+    statusDot.classList.toggle("ok", !!ok);
+    statusText.textContent = text;
   }
-  const cols = Object.keys(rows[0]).slice(0, 8); // keep it simple
-  let html = `<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>`;
-  for(const r of rows.slice(0, 15)){
-    html += `<tr>${cols.map(c=>`<td>${escapeHtml(String(r[c] ?? ""))}</td>`).join("")}</tr>`;
+
+  function show(id, yes=true){
+    document.getElementById(id).classList.toggle("hide", !yes);
   }
-  html += `</tbody></table>`;
-  el.innerHTML = html;
-}
 
-function escapeHtml(s){
-  return s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
-}
+  function switchTab(name){
+    // tabs
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelector(`.tab[data-tab="${name}"]`)?.classList.add("active");
 
-async function callRPC(name, payload={}){
-  const { data, error } = await sb.rpc(name, payload);
-  if(error){
-    console.error("RPC error:", name, error);
-    throw new Error(error.message || "RPC failed");
+    // sections
+    ["overview","member","admin","tables"].forEach(t => show("tab_"+t, t===name));
   }
-  return data;
-}
 
-/* Try multiple payload shapes (because your borrow_eligibility args are partially hidden) */
-async function callRPCWithFallback(name, payloadOptions){
-  let lastErr = null;
-  for(const payload of payloadOptions){
+  async function callRPC(name, payload={}){
+    const { data, error } = await sb.rpc(name, payload);
+    if(error){ alert(error.message); throw error; }
+    return data;
+  }
+
+  // =============================
+  // AUTH
+  // =============================
+  async function login(){
+    loginStatus.textContent = "";
+    const { data, error } = await sb.auth.signInWithPassword({
+      email: email.value.trim(),
+      password: password.value
+    });
+
+    if(error){
+      loginStatus.textContent = error.message;
+      setStatus(false, "Login failed");
+      return;
+    }
+
+    sessionUser = data.user;
+    setStatus(true, "Logged in: " + sessionUser.email);
+
+    // Show tabs + default view
+    show("appTabs", true);
+    switchTab("overview");
+
+    // Determine admin role
+    await detectAdmin();
+
+    // Load stats + tables
+    await loadOverview();
+    await refreshTables();
+  }
+
+  async function logout(){
+    await sb.auth.signOut();
+    sessionUser = null;
+    isAdmin = false;
+    setStatus(false, "Not logged in");
+    show("appTabs", false);
+    ["overview","member","admin","tables"].forEach(t => show("tab_"+t, false));
+    loginStatus.textContent = "Logged out";
+  }
+
+  async function detectAdmin(){
+    // Uses your existing function: is_admin()
     try{
-      const data = await callRPC(name, payload);
-      return { ok:true, data, used: payload };
+      const v = await callRPC("is_admin");
+      isAdmin = (v === true) || (v === "true") || (v?.is_admin === true);
     }catch(e){
-      lastErr = e;
+      isAdmin = false;
+    }
+    myRole.textContent = isAdmin ? "admin" : "member";
+    adminTabBtn.style.display = isAdmin ? "inline-flex" : "none";
+    // If not admin and user clicked admin, fallback
+    if(!isAdmin){
+      show("tab_admin", false);
     }
   }
-  return { ok:false, error:lastErr };
-}
 
-/* =========================
-   AUTH
-========================= */
-async function login(){
-  setStatus("");
-  const { data, error } = await sb.auth.signInWithPassword({
-    email: document.getElementById("email").value,
-    password: document.getElementById("password").value
-  });
+  // =============================
+  // OVERVIEW (read-only)
+  // =============================
+  async function loadOverview(){
+    try{
+      // Your functions from screenshots
+      const pot = await callRPC("current_pot_amount");
+      const myVal = await callRPC("member_total_value");
+      const myId = await callRPC("current_member_id");
 
-  const loginStatus = document.getElementById("loginStatus");
+      potAmount.textContent = (pot ?? "--");
+      myValue.textContent = (myVal ?? "--");
+      myMemberId.textContent = (myId ?? "--");
 
-  if(error){
-    loginStatus.innerText = error.message;
-    loginStatus.className = "muted err";
-    return;
+      // Pre-fill borrower id to reduce errors
+      if(myId && !loan_borrower.value) loan_borrower.value = myId;
+    }catch(e){
+      // keep UI alive
+    }
   }
 
-  loginStatus.innerText = "Login successful";
-  loginStatus.className = "muted ok";
-  document.getElementById("dashboard").classList.remove("hide");
-
-  await initUserContext();
-  await refreshAll();
-}
-
-async function logout(){
-  await sb.auth.signOut();
-  document.getElementById("dashboard").classList.add("hide");
-  document.getElementById("loginStatus").innerText = "Logged out";
-  document.getElementById("rolePill").innerText = "Role: --";
-  document.getElementById("memberPill").innerText = "Member ID: --";
-  IS_ADMIN = false;
-  MY_MEMBER_ID = null;
-}
-
-async function initUserContext(){
-  // is_admin()
-  try{
-    const admin = await callRPC("is_admin");
-    IS_ADMIN = !!admin;
-  }catch(e){
-    IS_ADMIN = false;
-  }
-
-  // current_member_id()
-  try{
-    const mid = await callRPC("current_member_id");
-    MY_MEMBER_ID = (mid === null || mid === undefined) ? null : mid;
-  }catch(e){
-    MY_MEMBER_ID = null;
-  }
-
-  document.getElementById("rolePill").innerText = `Role: ${IS_ADMIN ? "admin" : "member"}`;
-  document.getElementById("memberPill").innerText = `Member ID: ${MY_MEMBER_ID ?? "--"}`;
-
-  // Hide admin section for members
-  const adminCard = document.getElementById("adminCard");
-  if(!IS_ADMIN) adminCard.classList.add("hide");
-  else adminCard.classList.remove("hide");
-}
-
-/* =========================
-   LOAD STATS
-========================= */
-async function loadStats(){
-  // pot
-  try{
-    const pot = await callRPC("current_pot_amount");
-    document.getElementById("potAmount").innerText = pot ?? "--";
-  }catch(e){
-    document.getElementById("potAmount").innerText = "--";
-  }
-
-  // member_total_value(p_member_id bigint)
-  try{
-    if(MY_MEMBER_ID == null) throw new Error("No member id");
-    const val = await callRPC("member_total_value", { p_member_id: Number(MY_MEMBER_ID) });
-    document.getElementById("myValue").innerText = val ?? "--";
-  }catch(e){
-    document.getElementById("myValue").innerText = "--";
-  }
-}
-
-/* =========================
-   TABLE + CHART DATA LOAD
-========================= */
-async function refreshAll(){
-  setStatus("Refreshing…");
-  await loadStats();
-
-  // Members table (admin might see all; members might see only themselves)
-  await loadTable("members", "tbl_members");
-
-  // Other tables (best effort)
-  await loadTable("contributions", "tbl_contrib", { orderBy: "created_at", desc: true });
-  await loadTable("fines", "tbl_fines", { orderBy: "created_at", desc: true });
-  await loadTable("loans", "tbl_loans", { orderBy: "created_at", desc: true });
-  await loadTable("foundation_payments", "tbl_foundation", { orderBy: "created_at", desc: true });
-  await loadTable("repayments", "tbl_repayments", { orderBy: "created_at", desc: true });
-
-  // Charts based on contributions + fines rows
-  const contribRows = await fetchRows("contributions", { orderBy: "created_at", desc: false, limit: 300 });
-  const fineRows = await fetchRows("fines", { orderBy: "created_at", desc: false, limit: 300 });
-  renderCharts(contribRows, fineRows);
-
-  setStatus("Done ✅", true);
-}
-
-async function fetchRows(table, opts={}){
-  let q = sb.from(table).select("*").limit(opts.limit ?? 50);
-  if(opts.orderBy){
-    q = q.order(opts.orderBy, { ascending: !(opts.desc) });
-  }
-  const { data, error } = await q;
-  if(error){
-    console.warn("Fetch blocked or error:", table, error.message);
-    return [];
-  }
-  return data || [];
-}
-
-async function loadTable(table, containerId, opts={}){
-  const rows = await fetchRows(table, { ...opts, limit: 30 });
-  renderTable(containerId, rows);
-}
-
-function groupByDayAmount(rows, amountField){
-  // returns labels[] and values[] for last ~14 days if present
-  const map = new Map();
-  for(const r of (rows || [])){
-    const d = r.created_at ? new Date(r.created_at) : null;
-    if(!d || isNaN(d)) continue;
-    const key = d.toISOString().slice(0,10);
-    const amt = Number(r[amountField] ?? 0);
-    map.set(key, (map.get(key) || 0) + amt);
-  }
-  const labels = Array.from(map.keys()).sort();
-  const values = labels.map(k => map.get(k));
-  return { labels, values };
-}
-
-function renderCharts(contribRows, fineRows){
-  // Contribution chart
-  const c = groupByDayAmount(contribRows, "amount");
-  const f = groupByDayAmount(fineRows, "amount");
-
-  const ctxC = document.getElementById("chartContrib");
-  const ctxF = document.getElementById("chartFine");
-
-  if(chartContrib) chartContrib.destroy();
-  if(chartFine) chartFine.destroy();
-
-  chartContrib = new Chart(ctxC, {
-    type: "line",
-    data: { labels: c.labels, datasets: [{ label: "Contributions (daily sum)", data: c.values }] },
-    options: { responsive:true, maintainAspectRatio:false }
-  });
-
-  chartFine = new Chart(ctxF, {
-    type: "bar",
-    data: { labels: f.labels, datasets: [{ label: "Fines (daily sum)", data: f.values }] },
-    options: { responsive:true, maintainAspectRatio:false }
-  });
-}
-
-/* =========================
-   ADMIN ACTIONS
-========================= */
-async function addMember(){
-  if(!IS_ADMIN) return alert("Admin only");
-  try{
-    const payload = {
-      name: document.getElementById("m_name").value.trim(),
-      email: document.getElementById("m_email").value.trim(),
-      phone: document.getElementById("m_phone").value.trim()
-    };
+  // =============================
+  // ADMIN INSERTS
+  // =============================
+  async function addMember(){
+    if(!isAdmin){ alert("Admin only"); return; }
+    const payload = { name: m_name.value.trim(), email: m_email.value.trim(), phone: m_phone.value.trim() };
     const { error } = await sb.from("members").insert([payload]);
-    if(error) throw new Error(error.message);
-    alert("Member added ✅");
-    await refreshAll();
-  }catch(e){
-    alert("Add member failed: " + e.message);
+    if(error){ alert(error.message); return; }
+    alert("Member added");
+    await refreshTables();
   }
-}
 
-async function addContribution(){
-  if(!IS_ADMIN) return alert("Admin only");
-  try{
+  async function addContribution(){
+    if(!isAdmin){ alert("Admin only"); return; }
     await callRPC("add_contribution", {
-      p_member_id: Number(document.getElementById("c_member").value),
-      p_amount: Number(document.getElementById("c_amount").value)
+      p_member_id: BigInt(c_member.value),
+      p_amount: Number(c_amount.value)
     });
-    alert("Contribution added ✅");
-    await refreshAll();
-  }catch(e){
-    alert("Add contribution failed: " + e.message);
+    alert("Contribution added");
+    await loadOverview();
+    await refreshTables();
   }
-}
 
-async function addFine(){
-  if(!IS_ADMIN) return alert("Admin only");
-  try{
+  async function addFine(){
+    if(!isAdmin){ alert("Admin only"); return; }
     await callRPC("add_fine", {
-      p_member_id: Number(document.getElementById("f_member").value),
-      p_amount: Number(document.getElementById("f_amount").value),
-      p_reason: String(document.getElementById("f_reason").value || "")
+      p_member_id: BigInt(f_member.value),
+      p_amount: Number(f_amount.value),
+      p_reason: (f_reason.value || "").trim()
     });
-    alert("Fine added ✅");
-    await refreshAll();
-  }catch(e){
-    alert("Add fine failed: " + e.message);
+    alert("Fine added");
+    await loadOverview();
+    await refreshTables();
   }
-}
 
-/*
-  repayments_update_foundation args were not fully visible in your screenshot.
-  We will call it with fallbacks:
-  - {p_member_id, p_amount}
-  - {p_member_id, p_payment_amount}
-  - {p_member_id, p_value}
-  - {p_member_id}  (if your function calculates amount internally)
-*/
-async function addFoundation(){
-  if(!IS_ADMIN) return alert("Admin only");
-  const mid = Number(document.getElementById("fp_member").value);
-  const amt = Number(document.getElementById("fp_amount").value);
+  async function addFoundation(){
+    if(!isAdmin){ alert("Admin only"); return; }
 
-  const res = await callRPCWithFallback("repayments_update_foundation", [
-    { p_member_id: mid, p_amount: amt },
-    { p_member_id: mid, p_payment_amount: amt },
-    { p_member_id: mid, p_value: amt },
-    { p_member_id: mid }
-  ]);
+    // IMPORTANT:
+    // You do NOT have a function named "add_foundation_payment" in your list.
+    // The only relevant function you showed is: repayments_update_foundation(p_member_id bigint)
+    // So we call it, passing member_id only. If yours also needs amount, update the RPC signature accordingly.
+    //
+    // If you actually have a different function for foundation payments, replace the name here.
+    try{
+      await callRPC("repayments_update_foundation", {
+        p_member_id: BigInt(fp_member.value)
+      });
+      alert("Foundation update executed");
+    }catch(e){
+      alert("Your function repayments_update_foundation may not accept amount. Check its arguments in Supabase.");
+    }
 
-  if(!res.ok){
-    alert("Foundation update failed: " + res.error.message);
-    return;
+    await loadOverview();
+    await refreshTables();
   }
-  alert("Foundation payment applied ✅");
-  await refreshAll();
-}
 
-async function addRepayment(){
-  if(!IS_ADMIN) return alert("Admin only");
-  // Using same function because it's the only one you showed.
-  // If you later create add_repayment() we will swap it in.
-  return addFoundation();
-}
+  async function addRepayment(){
+    if(!isAdmin){ alert("Admin only"); return; }
 
-async function payInterest(){
-  if(!IS_ADMIN) return alert("Admin only");
-  try{
-    await callRPC("pay_interest", {
-      p_loan_id: document.getElementById("pi_loan").value.trim(),
-      p_amount: Number(document.getElementById("pi_amount").value)
-    });
-    alert("Interest payment recorded ✅");
-    await refreshAll();
-  }catch(e){
-    alert("Pay interest failed: " + e.message);
+    // You have: pay_interest(p_loan_id uuid, p_amount numeric)
+    // For repayments, you did not show a dedicated add_repayment RPC.
+    // If your repayment insert is direct table insert allowed by RLS, we can insert into repayments.
+    // We'll try table insert first.
+    const memberId = r_member.value.trim();
+    const amount = Number(r_amount.value);
+
+    // Try inserting to repayments table (if RLS allows admin insert)
+    const { error } = await sb.from("repayments").insert([{
+      member_id: memberId ? BigInt(memberId) : null,
+      amount: amount
+    }]);
+
+    if(error){
+      alert("Repayment insert failed (RLS or missing columns). Error: " + error.message);
+      return;
+    }
+
+    alert("Repayment added");
+    await loadOverview();
+    await refreshTables();
   }
-}
 
-async function runPayout(){
-  if(!IS_ADMIN) return alert("Admin only");
-  try{
+  async function runPayout(){
+    if(!isAdmin){ alert("Admin only"); return; }
     await callRPC("run_payout");
-    alert("run_payout ✅");
-    await refreshAll();
-  }catch(e){
-    alert("run_payout failed: " + e.message);
+    alert("Payout executed");
+    await loadOverview();
+    await refreshTables();
   }
-}
 
-async function runRotationPayout(){
-  if(!IS_ADMIN) return alert("Admin only");
-  try{
-    await callRPC("run_rotation_payout");
-    alert("run_rotation_payout ✅");
-    await refreshAll();
-  }catch(e){
-    alert("run_rotation_payout failed: " + e.message);
-  }
-}
-
-async function runAllRules(){
-  if(!IS_ADMIN) return alert("Admin only");
-  try{
+  async function runAllRules(){
+    if(!isAdmin){ alert("Admin only"); return; }
     await callRPC("run_all_njangi_rules");
-    alert("run_all_njangi_rules ✅");
-    await refreshAll();
-  }catch(e){
-    alert("run_all_njangi_rules failed: " + e.message);
-  }
-}
-
-async function runRulesQuick(){
-  if(!IS_ADMIN) return alert("Admin only");
-  return runAllRules();
-}
-
-/* =========================
-   MEMBER: LOAN REQUEST
-========================= */
-async function requestLoan(){
-  const msg = document.getElementById("loanMsg");
-  msg.innerText = "";
-
-  if(MY_MEMBER_ID == null){
-    msg.innerText = "No member_id found for this account. Make sure your members table maps to auth email correctly.";
-    msg.className = "muted err";
-    return;
+    alert("Rules executed");
+    await loadOverview();
+    await refreshTables();
   }
 
-  const surety = Number(document.getElementById("loan_surety").value);
-  const amount = Number(document.getElementById("loan_amount").value);
-
-  // Your borrow_eligibility args were cut off in the screenshot.
-  // We'll try common parameter names until one works.
-  const res = await callRPCWithFallback("borrow_eligibility", [
-    { p_borrower_id: Number(MY_MEMBER_ID), p_surety_id: surety, p_amount: amount },
-    { p_borrower_id: Number(MY_MEMBER_ID), p_surety_id: surety, p_requested_amount: amount },
-    { p_borrower_id: Number(MY_MEMBER_ID), p_surety_id: surety, p_request_amount: amount },
-    { p_borrower_id: Number(MY_MEMBER_ID), p_surety_id: surety, p_requested: amount }
-  ]);
-
-  if(!res.ok){
-    msg.innerText = "Loan request failed: " + res.error.message;
-    msg.className = "muted err";
-    return;
+  // =============================
+  // MEMBER ACTIONS
+  // =============================
+  async function requestLoan(){
+    await callRPC("borrow_eligibility", {
+      p_borrower_id: BigInt(loan_borrower.value),
+      p_surety_id: BigInt(loan_surety.value),
+      p_amount: Number(loan_amount.value)
+    });
+    alert("Loan request sent (eligibility checked by Supabase)");
+    await loadOverview();
+    await refreshTables();
   }
 
-  msg.innerText = "Loan request submitted ✅ (borrow_eligibility ran).";
-  msg.className = "muted ok";
-  await refreshAll();
-}
-
-/* Auto-resume if already logged in */
-(async function boot(){
-  const { data } = await sb.auth.getSession();
-  if(data?.session){
-    document.getElementById("dashboard").classList.remove("hide");
-    await initUserContext();
-    await refreshAll();
-    document.getElementById("loginStatus").innerText = "Session restored ✅";
-    document.getElementById("loginStatus").className = "muted ok";
+  async function payInterest(){
+    const loanId = (pi_loan_id.value || "").trim();
+    const amount = Number(pi_amount.value);
+    if(!loanId){ alert("Enter Loan ID"); return; }
+    await callRPC("pay_interest", { p_loan_id: loanId, p_amount: amount });
+    alert("Interest paid");
+    await loadOverview();
+    await refreshTables();
   }
-})();
+
+  // =============================
+  // TABLE RENDER
+  // =============================
+  function renderTable(el, rows){
+    if(!rows || rows.length === 0){
+      el.innerHTML = `<div class="muted">No rows (or blocked by RLS)</div>`;
+      return 0;
+    }
+    const cols = Object.keys(rows[0]);
+    const head = cols.map(c => `<th>${c}</th>`).join("");
+    const body = rows.map(r => `<tr>${cols.map(c => `<td>${r[c] ?? ""}</td>`).join("")}</tr>`).join("");
+    el.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    return rows.length;
+  }
+
+  async function refreshTables(){
+    // Fetch small slices so UI stays fast
+    const q1 = await sb.from("members").select("*").order("id", { ascending: false }).limit(60);
+    const q2 = await sb.from("contributions").select("*").order("id", { ascending: false }).limit(60);
+    const q3 = await sb.from("fines").select("*").order("id", { ascending: false }).limit(60);
+    const q4 = await sb.from("loans").select("*").order("id", { ascending: false }).limit(60);
+    const q5 = await sb.from("foundation_payments").select("*").order("id", { ascending: false }).limit(60);
+    const q6 = await sb.from("repayments").select("*").order("id", { ascending: false }).limit(60);
+
+    count_members.textContent = q1.data ? `${q1.data.length} rows` : "—";
+    count_contrib.textContent = q2.data ? `${q2.data.length} rows` : "—";
+    count_fines.textContent = q3.data ? `${q3.data.length} rows` : "—";
+    count_loans.textContent = q4.data ? `${q4.data.length} rows` : "—";
+    count_found.textContent = q5.data ? `${q5.data.length} rows` : "—";
+    count_repays.textContent = q6.data ? `${q6.data.length} rows` : "—";
+
+    renderTable(tbl_members, q1.data || []);
+    renderTable(tbl_contrib, q2.data || []);
+    renderTable(tbl_fines, q3.data || []);
+    renderTable(tbl_loans, q4.data || []);
+    renderTable(tbl_found, q5.data || []);
+    renderTable(tbl_repays, q6.data || []);
+  }
+
+  function clearTables(){
+    ["tbl_members","tbl_contrib","tbl_fines","tbl_loans","tbl_found","tbl_repays"].forEach(id=>{
+      document.getElementById(id).innerHTML = `<div class="muted">Cleared</div>`;
+    });
+  }
 </script>
 
 </body>
