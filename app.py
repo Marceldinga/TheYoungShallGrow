@@ -3,11 +3,10 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# SECURE MEMBER DASHBOARD (Single Script)
-# - Login with Supabase Auth
-# - Member sees ONLY their own data (by email -> member_id)
-# - Extra safety: every query also filters by member_id
-# - Admin can optionally switch member_id (requires admin RLS)
+# UPDATED SECURE DASHBOARD (Single Script)
+# ✅ Member sees ONLY their own data (email -> members.id)
+# ✅ Loans FIX: loans table uses borrower_member_id (NOT member_id)
+# ✅ Admin can optionally switch member_id (requires admin RLS)
 # ============================================================
 
 # ----------------------------
@@ -81,7 +80,6 @@ def logout():
     st.rerun()
 
 def attach_jwt(access_token: str):
-    # All PostgREST queries will use the logged-in JWT (RLS enforced)
     supabase.postgrest.auth(access_token)
 
 # ----------------------------
@@ -106,56 +104,51 @@ if not is_logged_in():
             st.session_state["access_token"] = res.session.access_token
             st.session_state["refresh_token"] = res.session.refresh_token
             st.session_state["user_email"] = (res.user.email or "").lower()
-            st.session_state["auth_user_id"] = str(res.user.id) if getattr(res, "user", None) else ""
             attach_jwt(st.session_state["access_token"])
             st.rerun()
         except Exception:
             st.error("Login failed. Check email/password or confirm the user exists in Supabase Auth.")
     st.stop()
 
-# always re-attach after reruns
+# Always re-attach JWT on rerun
 attach_jwt(st.session_state["access_token"])
 
 user_email = (st.session_state.get("user_email") or "").lower()
-auth_user_id = st.session_state.get("auth_user_id") or ""
 is_admin = user_email in ADMIN_EMAILS
 
 # ----------------------------
-# ✅ CRITICAL FIX: GET THE CORRECT MEMBER ROW BY EMAIL (NOT LIMIT 1)
+# ✅ IMPORTANT: Get member row by email (NOT limit(1) without filter)
 # ----------------------------
 def get_member_by_email(email: str):
-    # strict match on members.email
     try:
         data = supabase.table("members").select("*").ilike("email", email).limit(1).execute().data
         if data:
             return data[0]
     except Exception:
         pass
-    # fallback: case-insensitive equality
+
     try:
         data = supabase.table("members").select("*").eq("email", email).limit(1).execute().data
         if data:
             return data[0]
     except Exception:
         pass
+
     return None
 
 my_member = get_member_by_email(user_email)
 if not my_member:
     st.error(
-        "❌ This account is logged in, but I cannot find a matching row in public.members.\n\n"
-        "Fix: make sure public.members.email EXACTLY matches the Supabase Auth email."
+        "❌ Logged in, but no matching row found in public.members.\n\n"
+        "Fix: ensure public.members.email matches the Auth email exactly."
     )
     st.stop()
 
 my_member_id = int(my_member["id"])
 
 # ----------------------------
-# ADMIN: optional member switcher (HIDDEN for normal members)
+# HEADER
 # ----------------------------
-effective_member_id = my_member_id
-member_switch = None
-
 st.markdown(
     f"""
     <div class='hdr'>
@@ -177,30 +170,35 @@ st.markdown(
 st.write("")
 st.button("Logout", on_click=logout)
 
+# ----------------------------
+# FILTERS
+# ----------------------------
 st.subheader("Filters")
 
 if is_admin:
-    f0, f1, f2, f3, f4, f5 = st.columns([2, 2, 3, 2, 2, 2])
-    member_switch = f0.text_input("Member ID (admin)", placeholder="e.g. 10")
+    a1, f1, f2, f3, f4 = st.columns([2, 2, 3, 2, 2])
+    admin_member_id = a1.text_input("Member ID (admin)", placeholder="e.g. 10")
 else:
-    f1, f2, f3, f4, f5 = st.columns([2, 3, 2, 2, 2])
+    f1, f2, f3, f4 = st.columns([2, 3, 2, 2])
+    admin_member_id = ""
 
 range_opt = f1.selectbox("Time range", ["All time", "Last 30 days", "Last 90 days", "This year"], index=0)
-search_text = f2.text_input("Quick search", placeholder="e.g. unpaid, paid, pending, late, foundation...")
+search_text = f2.text_input("Quick search", placeholder="e.g. unpaid, paid, pending, late...")
 record_id = f3.text_input("Record ID", placeholder="e.g. 58")
-show_only_unpaid = f5.checkbox("Only unpaid fines", value=False)
+show_only_unpaid = f4.checkbox("Only unpaid fines", value=False)
 
-# apply admin switch only if admin
-if is_admin and (member_switch or "").strip():
+# effective member view
+effective_member_id = my_member_id
+if is_admin and admin_member_id.strip():
     try:
-        effective_member_id = int(member_switch.strip())
+        effective_member_id = int(admin_member_id.strip())
     except Exception:
         effective_member_id = my_member_id
 
 st.markdown(f"<div class='small-muted'>Currently viewing: <b>member_id = {effective_member_id}</b></div>", unsafe_allow_html=True)
 
 # ----------------------------
-# FILTER FUNCTIONS
+# FILTER HELPERS
 # ----------------------------
 def apply_date_filter(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
     if df.empty or date_col not in df.columns:
@@ -236,8 +234,13 @@ def apply_record_id_filter(df: pd.DataFrame) -> pd.DataFrame:
         return df
     return df[pd.to_numeric(df["id"], errors="coerce") == rid]
 
+def safe_sum(df, col):
+    if df.empty or col not in df.columns:
+        return 0.0
+    return float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
+
 # ----------------------------
-# FETCH HELPERS (ALWAYS enforce member_id in query)
+# FETCH HELPERS
 # ----------------------------
 def fetch_df(table: str, cols="*", member_col="member_id", order_col=None, date_col=None) -> pd.DataFrame:
     q = supabase.table(table).select(cols).eq(member_col, effective_member_id)
@@ -249,38 +252,25 @@ def fetch_df(table: str, cols="*", member_col="member_id", order_col=None, date_
         df = apply_date_filter(df, date_col)
     return df
 
-def fetch_loans_best_effort() -> pd.DataFrame:
-    # Tries typical schemas; your loans might be using a different column name.
-    candidates = [
-        ("member_id", "created_at"),
-        ("borrower_id", "created_at"),
-        ("member_id", "updated_at"),
-        ("borrower_id", "updated_at"),
-    ]
-    for member_col, date_col in candidates:
-        try:
-            df = fetch_df("loans", "*", member_col=member_col, order_col=date_col, date_col=date_col)
-            if not df.empty:
-                df["_matched_on"] = member_col
-                return df
-        except Exception:
-            continue
-    return pd.DataFrame()
-
 # ----------------------------
 # LOAD DATA
 # ----------------------------
+# contributions: member_id ✅
 contrib_df = fetch_df("contributions", "id,member_id,amount,kind,created_at,updated_at",
                       member_col="member_id", order_col="created_at", date_col="created_at")
 contrib_df = apply_search(contrib_df, ["kind"])
 contrib_df = apply_record_id_filter(contrib_df)
 
-found_df = fetch_df("foundation_payments",
-                    "id,member_id,amount_paid,amount_pending,status,date_paid,notes,updated_at,converted_to_loan,converted_loan_id",
-                    member_col="member_id", order_col="date_paid", date_col="date_paid")
+# foundation_payments: member_id ✅
+found_df = fetch_df(
+    "foundation_payments",
+    "id,member_id,amount_paid,amount_pending,status,date_paid,notes,updated_at,converted_to_loan,converted_loan_id",
+    member_col="member_id", order_col="date_paid", date_col="date_paid"
+)
 found_df = apply_search(found_df, ["status", "notes"])
 found_df = apply_record_id_filter(found_df)
 
+# fines: member_id ✅
 fines_df = fetch_df("fines", "id,member_id,amount,reason,status,paid_at,created_at,updated_at",
                     member_col="member_id", order_col="created_at", date_col="created_at")
 fines_df = apply_search(fines_df, ["reason", "status"])
@@ -288,18 +278,15 @@ if show_only_unpaid and "status" in fines_df.columns:
     fines_df = fines_df[fines_df["status"].astype(str).str.lower() == "unpaid"]
 fines_df = apply_record_id_filter(fines_df)
 
-loans_df = fetch_loans_best_effort()
-loans_df = apply_search(loans_df, ["status", "notes", "type"])
+# ✅ loans: borrower_member_id (FIX)
+loans_df = fetch_df("loans", "*",
+                    member_col="borrower_member_id", order_col="created_at", date_col="created_at")
+loans_df = apply_search(loans_df, ["status"])
 loans_df = apply_record_id_filter(loans_df)
 
 # ----------------------------
 # KPIs
 # ----------------------------
-def safe_sum(df, col):
-    if df.empty or col not in df.columns:
-        return 0.0
-    return float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
-
 total_contrib = safe_sum(contrib_df, "amount")
 total_found_paid = safe_sum(found_df, "amount_paid")
 
@@ -319,7 +306,7 @@ elif not loans_df.empty:
     active_loans = len(loans_df)
 
 loan_total = 0.0
-for col in ["principal", "amount", "loan_amount"]:
+for col in ["principal", "total_due", "balance"]:
     if not loans_df.empty and col in loans_df.columns:
         loan_total = safe_sum(loans_df, col)
         break
@@ -353,15 +340,8 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("Loans")
     if loans_df.empty:
-        st.warning(
-            "No loans returned for this member.\n\n"
-            "If you KNOW this member has loans, then either:\n"
-            "• the loans table uses a different column name than member_id/borrower_id, OR\n"
-            "• RLS is blocking access (especially for admin viewing other members)."
-        )
+        st.info("No loans found for this member.")
     else:
-        if "_matched_on" in loans_df.columns:
-            st.caption(f"Loans matched using column: {loans_df['_matched_on'].iloc[0]}")
         st.dataframe(loans_df, use_container_width=True)
 
 with tabs[4]:
@@ -369,9 +349,9 @@ with tabs[4]:
     st.json(my_member)
 
 # ----------------------------
-# FINAL SECURITY NOTE
+# SECURITY NOTE
 # ----------------------------
 if not is_admin:
     st.caption("Security: you can only view your own data (by email → member_id).")
 else:
-    st.info("Admin: You can switch Member ID. If some data doesn't show, you must allow admin read in RLS.")
+    st.info("Admin: You can switch Member ID (works only if admin RLS policies allow cross-member access).")
