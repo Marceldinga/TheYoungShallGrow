@@ -232,14 +232,6 @@
     .section{display:none}
     .section.active{display:block}
 
-    label{
-      display:block;
-      color:var(--muted);
-      font-size:12px;
-      margin-top:10px;
-      font-weight:800;
-    }
-
     /* ===========================
        TABLES
     =========================== */
@@ -285,15 +277,6 @@
     .b-partial{color:#2dd4bf;background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.22)}
     .b-unknown{color:#cbd5e1;background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.22)}
 
-    .helper{
-      margin-top:10px;
-      font-size:12px;
-      color:var(--muted);
-      background:rgba(31,75,153,.10);
-      border:1px solid rgba(31,75,153,.18);
-      padding:10px 12px;border-radius:14px;
-    }
-
     #toast{
       position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
       background:rgba(15,23,42,.92);
@@ -305,26 +288,6 @@
       z-index:9999;
       max-width:min(560px,92vw);
       font-size:13px;
-    }
-
-    .chartWrap{position:relative;}
-    .noDataOverlay{
-      position:absolute; inset:0;
-      display:none;
-      align-items:center; justify-content:center;
-      text-align:center;
-      color:var(--muted);
-      font-size:12px;
-      pointer-events:none;
-      padding:8px;
-    }
-    .noDataOverlay .box{
-      padding:10px 12px;
-      border-radius:14px;
-      border:1px solid var(--border);
-      background:var(--card2);
-      max-width:90%;
-      box-shadow:var(--shadow2);
     }
 
     @media (max-width:1100px){
@@ -354,8 +317,8 @@
     <div class="sub">Sign in to manage Njangi contributions, loans, and payouts.</div>
 
     <div class="authTabs">
-      <button id="tabSignIn" class="btn primary" onclick="setAuthMode('signin')">Sign in</button>
-      <button id="tabSignUp" class="btn ghost" onclick="setAuthMode('signup')">Sign up</button>
+      <button id="tabSignIn" class="btn primary" type="button">Sign in</button>
+      <button id="tabSignUp" class="btn ghost" type="button">Sign up</button>
     </div>
 
     <div class="lockGrid">
@@ -369,7 +332,7 @@
       <input id="email" placeholder="Email" autocomplete="username" />
       <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
 
-      <button id="btnAuth" class="btn primary" onclick="signIn()">Sign in</button>
+      <button id="btnAuth" class="btn primary" type="button">Sign in</button>
       <div id="lockErr" class="err"></div>
     </div>
   </div>
@@ -384,28 +347,28 @@
     <div class="card">
       <div class="row"><span class="sub">Signed in</span><span class="pill" id="who">—</span></div>
       <div class="row" style="margin-top:10px;"><span class="sub">Role</span><span class="pill" id="role">—</span></div>
-      <button class="btn ghost" style="width:100%;margin-top:10px" onclick="signOut()">Logout</button>
+      <button class="btn ghost" style="width:100%;margin-top:10px" type="button" id="btnLogout">Logout</button>
       <div id="sideErr" class="err"></div>
     </div>
 
     <div class="nav">
-      <button id="navDash" class="active" onclick="show('dash','Dashboard')">Dashboard</button>
-      <button id="navMembers" onclick="show('members','Members')">Members</button>
-      <button id="navContrib" onclick="show('contrib','Contributions')">Contributions</button>
-      <button id="navLoans" onclick="show('loans','Loans')">Loans</button>
-      <button id="navFines" onclick="show('fines','Fines')">Fines</button>
-      <button id="navPayouts" onclick="show('payouts','Payouts')">Payouts</button>
-      <button id="navHistory" onclick="show('history','History')">History</button>
-      <button id="navFPayments" onclick="show('foundation_payments','Foundation Payments')">Foundation Payments</button>
+      <button id="navDash" class="active" type="button">Dashboard</button>
+      <button id="navMembers" type="button">Members</button>
+      <button id="navContrib" type="button">Contributions</button>
+      <button id="navLoans" type="button">Loans</button>
+      <button id="navFines" type="button">Fines</button>
+      <button id="navPayouts" type="button">Payouts</button>
+      <button id="navHistory" type="button">History</button>
+      <button id="navFPayments" type="button">Foundation Payments</button>
 
-      <button class="btn ghost" style="margin-top:6px" onclick="reloadAll()">Refresh</button>
+      <button class="btn ghost" style="margin-top:6px" type="button" id="btnRefresh">Refresh</button>
     </div>
 
     <div class="card">
       <div class="sub"><b>Rotation</b></div>
       <div style="margin-top:8px;font-weight:1000;font-size:18px" id="nextName">—</div>
       <div class="sub" id="nextInfo">—</div>
-      <button class="btn primary" style="width:100%;margin-top:10px" onclick="runPayout()">Run Payout</button>
+      <button class="btn primary" style="width:100%;margin-top:10px" type="button" id="btnRunPayout">Run Payout</button>
       <div class="sub" style="margin-top:10px;">Start: <b>Jan 3, 2026</b> • Every 14 days</div>
     </div>
   </aside>
@@ -420,15 +383,132 @@
       <span class="pill">Total Interest: <b id="kInterestMini">$0</b></span>
     </div>
 
-    <!-- YOUR SECTIONS STAY THE SAME -->
-    <!-- (I’m keeping your full sections unchanged for size; your original HTML below is compatible) -->
+    <!-- DASH -->
+    <section id="sec-dash" class="section active">
+      <div class="grid4">
+        <div class="card kpi">
+          <div class="label">Members</div>
+          <div class="val" id="kMembers">0</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Total Contributions</div>
+          <div class="val" id="kContrib">$0</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Active Loans</div>
+          <div class="val" id="kLoans">0</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Unpaid Fines</div>
+          <div class="val" id="kFines">$0</div>
+        </div>
+      </div>
 
-    <!-- ✅ IMPORTANT:
-         Paste your exact <section> blocks here (dash, members, contrib, loans, fines, payouts, history, foundation_payments)
-         exactly as you had them. Nothing in the HTML sections caused your Supabase issue. -->
+      <div class="grid2" style="margin-top:12px">
+        <div class="card">
+          <div style="font-weight:900;margin-bottom:8px">Contributions by Member</div>
+          <canvas id="chartHist" height="140"></canvas>
+          <div class="sub" style="margin-top:8px">If you see “No data”, it means RLS is blocking or the table is empty.</div>
+        </div>
+        <div class="card">
+          <div style="font-weight:900;margin-bottom:8px">Loans Status</div>
+          <canvas id="chartPie" height="140"></canvas>
+          <div class="sub" style="margin-top:8px">This is a simple summary chart.</div>
+        </div>
+      </div>
+    </section>
 
-    <!-- For brevity, I’m not repeating your ~2000 lines of UI here in the middle.
-         Keep your sections exactly the same as your current file. -->
+    <!-- MEMBERS -->
+    <section id="sec-members" class="section">
+      <div class="card">
+        <div style="font-weight:900">Members</div>
+        <div class="sub">Admin sees all. Member sees only their row (RLS).</div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th class="tdCenter">Status</th></tr></thead>
+            <tbody id="tbMembers"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTRIBUTIONS -->
+    <section id="sec-contrib" class="section">
+      <div class="card">
+        <div style="font-weight:900">Contributions</div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th></tr></thead>
+            <tbody id="tbContrib"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOANS -->
+    <section id="sec-loans" class="section">
+      <div class="card">
+        <div style="font-weight:900">Loans</div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Principal</th><th class="tdMoney">Total</th><th class="tdCenter">Status</th></tr></thead>
+            <tbody id="tbLoans"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- FINES -->
+    <section id="sec-fines" class="section">
+      <div class="card">
+        <div style="font-weight:900">Fines</div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th><th class="tdCenter">Paid</th></tr></thead>
+            <tbody id="tbFines"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAYOUTS -->
+    <section id="sec-payouts" class="section">
+      <div class="card">
+        <div style="font-weight:900">Payouts</div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th></tr></thead>
+            <tbody id="tbPayouts"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="sec-history" class="section">
+      <div class="card">
+        <div style="font-weight:900">History</div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Member</th><th class="tdMoney">Amount</th><th>Note</th></tr></thead>
+            <tbody id="tbHistory"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOUNDATION PAYMENTS -->
+    <section id="sec-foundation_payments" class="section">
+      <div class="card">
+        <div style="font-weight:900">Foundation Payments</div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th><th class="tdCenter">Status</th></tr></thead>
+            <tbody id="tbFoundation"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
   </main>
 </div>
@@ -437,8 +517,7 @@
 
 <script>
 /* =========================================================
-   SUPABASE CONFIG (FIXED + SAFE)
-   ✅ Uses window.supabase (reliable in browser)
+   SUPABASE CONFIG (YOUR PROJECT)
 ========================================================= */
 const SUPABASE_URL = "https://ficlrtvrrzfiakmciwel.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI";
@@ -461,26 +540,26 @@ const INTEREST_CYCLE_DAYS = 26;
 =========================== */
 let appState = { foundation:0, total_interest_generated:0, next_payout_index:0, next_payout_date:"2026-01-03", rotation_start_date:"2026-01-03" };
 let members = [];
-let history = [];
+let contributions = [];
 let payouts = [];
 let fines = [];
 let foundationPayments = [];
 let loans = [];
-let latestSession = null;
-let contribTotalsByMember = {};
+let history = [];
+
 let histChart = null;
 let pieChart = null;
 
 window.isAdmin = false;
 window.currentMemberId = null;
 window.profileApproved = false;
-let profiles = [];
+
+let AUTH_MODE = "signin";
 
 /* ===========================
-   HELPERS (Better debugging)
+   HELPERS
 =========================== */
 const money = (x) => "$" + (Number(x)||0).toLocaleString();
-const fromIso = (s) => new Date(s + "T00:00:00");
 
 function toast(msg){
   const el = document.getElementById("toast");
@@ -504,23 +583,40 @@ function lockErr(msg){
   el.textContent = msg || "";
 }
 
+function setAuthLoading(on){
+  const btn = document.getElementById("btnAuth");
+  btn.disabled = !!on;
+  btn.textContent = on ? "Please wait..." : (AUTH_MODE === "signup" ? "Create account" : "Sign in");
+}
+
 function logSupabaseError(where, error){
   if(!error) return;
   console.error(`[Supabase Error] ${where}`, error);
-  toast(`${where}: ${error.message || error}`);
+  const msg = `${where}: ${error.message || error}`;
+  lockErr(msg);
+  toast(msg);
 }
 
-/* Catch JS errors */
 window.addEventListener("error", (e) => console.error("JS error:", e?.message || e));
 window.addEventListener("unhandledrejection", (e) => console.error("Promise error:", e?.reason || e));
 
-/* ===========================
-   AUTH MODE
-=========================== */
-let AUTH_MODE = "signin";
-function setAuthMode(mode){
-  AUTH_MODE = mode === "signup" ? "signup" : "signin";
+function setActiveNav(id){
+  document.querySelectorAll(".nav button").forEach(b => b.classList.remove("active"));
+  const btn = document.getElementById(id);
+  if(btn) btn.classList.add("active");
+}
 
+function show(sectionKey, title){
+  document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+  const sec = document.getElementById(`sec-${sectionKey}`);
+  if(sec) sec.classList.add("active");
+  document.getElementById("pageTitle").textContent = title || "Dashboard";
+}
+
+/* ===========================
+   AUTH MODE UI
+=========================== */
+function applyAuthModeUI(){
   const su = document.getElementById("signupFields");
   const btn = document.getElementById("btnAuth");
   const tabIn = document.getElementById("tabSignIn");
@@ -529,29 +625,32 @@ function setAuthMode(mode){
   if(AUTH_MODE === "signup"){
     su.style.display = "block";
     btn.textContent = "Create account";
-    btn.onclick = signUp;
-    tabUp.classList.remove("ghost");
-    tabUp.classList.add("primary");
-    tabIn.classList.add("ghost");
-    tabIn.classList.remove("primary");
-  }else{
+    tabUp.classList.remove("ghost"); tabUp.classList.add("primary");
+    tabIn.classList.add("ghost"); tabIn.classList.remove("primary");
+  } else {
     su.style.display = "none";
     btn.textContent = "Sign in";
-    btn.onclick = signIn;
-    tabIn.classList.remove("ghost");
-    tabIn.classList.add("primary");
-    tabUp.classList.add("ghost");
-    tabUp.classList.remove("primary");
+    tabIn.classList.remove("ghost"); tabIn.classList.add("primary");
+    tabUp.classList.add("ghost"); tabUp.classList.remove("primary");
   }
-  lockErr("");
+}
+
+function setAuthMode(mode){
+  AUTH_MODE = (mode === "signup") ? "signup" : "signin";
+  lockErr(""); sideErr("");
+  applyAuthModeUI();
 }
 
 /* ===========================
    ROLE / APPROVAL GATE
-   (If this fails, it's 100% RLS on profiles)
 =========================== */
 async function enforceAdminGate(){
-  const { data } = await sb.auth.getUser();
+  const { data, error: userErr } = await sb.auth.getUser();
+  if(userErr){
+    lockErr("Auth error: " + userErr.message);
+    return false;
+  }
+
   const user = data?.user;
 
   if(!user){
@@ -560,17 +659,21 @@ async function enforceAdminGate(){
     return false;
   }
 
+  // profile lookup
   const { data: profile, error } = await sb
     .from("profiles")
     .select("role, approved, member_id")
     .eq("id", user.id)
     .maybeSingle();
 
+  console.log("PROFILE RESULT:", { profile, error });
+
   if(error){
     sideErr("profiles blocked (RLS): " + error.message);
     await sb.auth.signOut();
     document.getElementById("app").style.display = "none";
     document.getElementById("locked").style.display = "flex";
+    lockErr("Login blocked by profiles RLS. Fix profiles policies in Supabase.");
     return false;
   }
 
@@ -579,6 +682,7 @@ async function enforceAdminGate(){
     await sb.auth.signOut();
     document.getElementById("app").style.display = "none";
     document.getElementById("locked").style.display = "flex";
+    lockErr("No profiles row for this user. Create it in public.profiles.");
     return false;
   }
 
@@ -588,17 +692,22 @@ async function enforceAdminGate(){
 
   if(!window.isAdmin && !window.profileApproved){
     await sb.auth.signOut();
-    lockErr("Your account is pending admin approval. Please wait for admin to approve.");
     document.getElementById("app").style.display = "none";
     document.getElementById("locked").style.display = "flex";
+    lockErr("Your account is pending admin approval. Please wait for admin to approve.");
     return false;
   }
 
+  // Show app
   document.getElementById("locked").style.display = "none";
   document.getElementById("app").style.display = "flex";
+
   document.getElementById("who").textContent = user.email || "";
   document.getElementById("role").textContent = profile.role || "member";
   document.getElementById("today").textContent = new Date().toLocaleDateString();
+
+  // If member, disable Members nav (optional UI)
+  document.getElementById("navMembers").style.display = window.isAdmin ? "block" : "none";
 
   return true;
 }
@@ -607,15 +716,20 @@ async function enforceAdminGate(){
    AUTH
 =========================== */
 async function signIn(){
-  lockErr("");
-  sideErr("");
-
-  const email = document.getElementById("email").value.trim();
+  lockErr(""); sideErr("");
+  const email = document.getElementById("email").value.trim().toLowerCase();
   const password = document.getElementById("password").value;
 
-  if(!email || !password) return toast("Enter email and password");
+  if(!email || !password){
+    lockErr("Enter email and password.");
+    return;
+  }
 
-  const { error } = await sb.auth.signInWithPassword({ email, password });
+  setAuthLoading(true);
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  console.log("SIGNIN RESULT:", { data, error });
+  setAuthLoading(false);
+
   if(error) return logSupabaseError("signIn", error);
 
   const ok = await enforceAdminGate();
@@ -626,22 +740,45 @@ async function signIn(){
 }
 
 async function signUp(){
-  lockErr("");
-  sideErr("");
-
+  lockErr(""); sideErr("");
   const email = document.getElementById("email").value.trim().toLowerCase();
   const password = document.getElementById("password").value;
-  if(!email || !password) return toast("Enter email and password");
 
+  if(!email || !password){
+    lockErr("Enter email and password.");
+    return;
+  }
+
+  setAuthLoading(true);
+
+  // Only allow signup if email exists in members
   const pre = await sb.from("members").select("id,name,email").eq("email", email).maybeSingle();
-  if(pre.error) return logSupabaseError("members lookup", pre.error);
-  if(!pre.data) return toast("Signup blocked: your email is not registered by admin yet.");
+  console.log("MEMBER LOOKUP:", pre);
+
+  if(pre.error){
+    setAuthLoading(false);
+    return logSupabaseError("members lookup", pre.error);
+  }
+  if(!pre.data){
+    setAuthLoading(false);
+    lockErr("Signup blocked: your email is not registered by admin yet.");
+    return;
+  }
 
   const { data, error } = await sb.auth.signUp({ email, password });
-  if(error) return logSupabaseError("signUp", error);
+  console.log("SIGNUP RESULT:", { data, error });
+
+  if(error){
+    setAuthLoading(false);
+    return logSupabaseError("signUp", error);
+  }
 
   const userId = data?.user?.id;
-  if(!userId) return toast("Signup created, but user id missing. Try sign in.");
+  if(!userId){
+    setAuthLoading(false);
+    lockErr("Signup created, but user id missing. Try sign in.");
+    return;
+  }
 
   const prof = await sb.from("profiles").upsert([{
     id: userId,
@@ -649,6 +786,10 @@ async function signUp(){
     approved: false,
     member_id: pre.data.id
   }]);
+  console.log("PROFILE UPSERT:", prof);
+
+  setAuthLoading(false);
+
   if(prof.error) logSupabaseError("profiles upsert", prof.error);
 
   toast("Account created. Waiting for admin approval.");
@@ -659,20 +800,282 @@ async function signUp(){
 
 async function signOut(){
   await sb.auth.signOut();
-  sideErr("");
-  lockErr("");
+  sideErr(""); lockErr("");
   document.getElementById("app").style.display = "none";
   document.getElementById("locked").style.display = "flex";
 }
 
 /* ===========================
-   LOAD (kept as you have it)
-   NOTE: if these selects fail -> RLS policies missing
+   DATA LOAD
+   This is a complete working loader + renderer.
+   If any table is blocked by RLS, it will show the error.
 =========================== */
+async function safeSelect(table, queryBuilderFn){
+  try{
+    let q = sb.from(table).select("*");
+    if(queryBuilderFn) q = queryBuilderFn(q);
+    const res = await q;
+    if(res.error) throw res.error;
+    return res.data || [];
+  }catch(e){
+    console.error(`Select failed (${table})`, e);
+    sideErr(`Table blocked or missing (${table}): ${e.message || e}`);
+    return [];
+  }
+}
+
+function memberNameById(id){
+  const m = members.find(x => x.id === id);
+  return m?.name || m?.full_name || m?.email || id || "—";
+}
+
+function badgeStatus(status){
+  const s = String(status || "").toLowerCase();
+  if(s.includes("pending")) return `<span class="badge b-pending">Pending</span>`;
+  if(s.includes("active")) return `<span class="badge b-active">Active</span>`;
+  if(s.includes("cleared")) return `<span class="badge b-cleared">Cleared</span>`;
+  if(s.includes("paid")) return `<span class="badge b-paid">Paid</span>`;
+  if(s.includes("unpaid")) return `<span class="badge b-unpaid">Unpaid</span>`;
+  return `<span class="badge b-unknown">${status || "—"}</span>`;
+}
+
+function renderTable(tbodyId, rowsHtml){
+  const tb = document.getElementById(tbodyId);
+  if(!tb) return;
+  tb.innerHTML = rowsHtml || `<tr><td colspan="10" class="sub">No data</td></tr>`;
+}
+
+function renderCharts(){
+  // Histogram: contributions totals by member
+  const totals = {};
+  for(const c of contributions){
+    const mid = c.member_id || c.memberId;
+    const amt = Number(c.amount || c.value || 0);
+    if(!mid) continue;
+    totals[mid] = (totals[mid] || 0) + amt;
+  }
+  const labels = Object.keys(totals).map(id => memberNameById(id));
+  const dataVals = Object.keys(totals).map(id => totals[id]);
+
+  const ctx1 = document.getElementById("chartHist");
+  if(ctx1){
+    if(histChart) histChart.destroy();
+    histChart = new Chart(ctx1, {
+      type: "bar",
+      data: { labels, datasets: [{ label:"Total Contributions", data: dataVals }] },
+      options: { responsive:true, plugins:{ legend:{ display:true } } }
+    });
+  }
+
+  // Pie: loans status count
+  const statusCount = {};
+  for(const l of loans){
+    const s = String(l.status || "unknown").toLowerCase();
+    statusCount[s] = (statusCount[s] || 0) + 1;
+  }
+  const pieLabels = Object.keys(statusCount);
+  const pieData = pieLabels.map(k => statusCount[k]);
+
+  const ctx2 = document.getElementById("chartPie");
+  if(ctx2){
+    if(pieChart) pieChart.destroy();
+    pieChart = new Chart(ctx2, {
+      type:"pie",
+      data:{ labels: pieLabels, datasets:[{ data: pieData }] },
+      options:{ responsive:true }
+    });
+  }
+}
+
+function renderKPIs(){
+  // members count
+  document.getElementById("kMembers").textContent = String(members.length || 0);
+
+  // total contributions
+  const totalContrib = contributions.reduce((a,r)=>a + Number(r.amount||0), 0);
+  document.getElementById("kContrib").textContent = money(totalContrib);
+
+  // active loans count
+  const activeLoans = loans.filter(l => String(l.status||"").toLowerCase().includes("active")).length;
+  document.getElementById("kLoans").textContent = String(activeLoans);
+
+  // unpaid fines
+  const unpaidFines = fines
+    .filter(f => String(f.paid||f.is_paid||"").toLowerCase() !== "true" && f.paid !== true)
+    .reduce((a,r)=>a + Number(r.amount||0), 0);
+  document.getElementById("kFines").textContent = money(unpaidFines);
+
+  // total interest mini (uses appState if you track it)
+  document.getElementById("kInterestMini").textContent = money(appState.total_interest_generated || 0);
+}
+
+function renderAll(){
+  // Members
+  renderTable("tbMembers",
+    members.map(m => `
+      <tr>
+        <td>${m.name || m.full_name || "—"}</td>
+        <td>${m.email || "—"}</td>
+        <td class="tdCenter">${badgeStatus(m.status || "active")}</td>
+      </tr>
+    `).join("")
+  );
+
+  // Contributions
+  renderTable("tbContrib",
+    contributions.slice(0, 200).map(c => `
+      <tr>
+        <td>${(c.date || c.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${memberNameById(c.member_id)}</td>
+        <td class="tdMoney">${money(c.amount || 0)}</td>
+      </tr>
+    `).join("")
+  );
+
+  // Loans
+  renderTable("tbLoans",
+    loans.slice(0, 200).map(l => `
+      <tr>
+        <td>${(l.date || l.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${memberNameById(l.member_id)}</td>
+        <td class="tdMoney">${money(l.principal || l.amount || 0)}</td>
+        <td class="tdMoney">${money(l.total || l.total_amount || l.amount || 0)}</td>
+        <td class="tdCenter">${badgeStatus(l.status || "active")}</td>
+      </tr>
+    `).join("")
+  );
+
+  // Fines
+  renderTable("tbFines",
+    fines.slice(0, 200).map(f => `
+      <tr>
+        <td>${(f.date || f.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${memberNameById(f.member_id)}</td>
+        <td class="tdMoney">${money(f.amount || 0)}</td>
+        <td class="tdCenter">${(f.paid===true || String(f.paid||"").toLowerCase()==="true") ? badgeStatus("paid") : badgeStatus("unpaid")}</td>
+      </tr>
+    `).join("")
+  );
+
+  // Payouts
+  renderTable("tbPayouts",
+    payouts.slice(0, 200).map(p => `
+      <tr>
+        <td>${(p.date || p.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${memberNameById(p.member_id)}</td>
+        <td class="tdMoney">${money(p.amount || 0)}</td>
+      </tr>
+    `).join("")
+  );
+
+  // History
+  renderTable("tbHistory",
+    history.slice(0, 200).map(h => `
+      <tr>
+        <td>${(h.date || h.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${h.type || h.event_type || "—"}</td>
+        <td>${memberNameById(h.member_id)}</td>
+        <td class="tdMoney">${money(h.amount || 0)}</td>
+        <td>${h.note || h.details || "—"}</td>
+      </tr>
+    `).join("")
+  );
+
+  // Foundation Payments
+  renderTable("tbFoundation",
+    foundationPayments.slice(0, 200).map(fp => `
+      <tr>
+        <td>${(fp.date || fp.created_at || "").toString().slice(0,10) || "—"}</td>
+        <td>${memberNameById(fp.member_id)}</td>
+        <td class="tdMoney">${money(fp.amount || 0)}</td>
+        <td class="tdCenter">${badgeStatus(fp.status || "pending")}</td>
+      </tr>
+    `).join("")
+  );
+
+  renderKPIs();
+  renderCharts();
+}
+
 async function reloadAll(){
-  // IMPORTANT: Your existing reloadAll() / renderAll() / all functions can stay the same.
-  // The real fix is the SQL policies below.
-  toast("Now run the SQL policies below in Supabase, then refresh.");
+  sideErr("");
+
+  // If you have an app_state table, this tries to read it; if not, it fails safely.
+  try{
+    const st = await sb.from("app_state").select("*").maybeSingle();
+    if(st?.data) appState = st.data;
+  }catch(e){
+    // ignore
+  }
+
+  // Core tables (RLS will restrict automatically)
+  members = await safeSelect("members");
+  contributions = await safeSelect("contributions", (q)=>q.order("created_at", {ascending:false}));
+  loans = await safeSelect("loans", (q)=>q.order("created_at", {ascending:false}));
+  fines = await safeSelect("fines", (q)=>q.order("created_at", {ascending:false}));
+  payouts = await safeSelect("payouts", (q)=>q.order("created_at", {ascending:false}));
+  history = await safeSelect("history", (q)=>q.order("created_at", {ascending:false}));
+  foundationPayments = await safeSelect("foundation_payments", (q)=>q.order("created_at", {ascending:false}));
+
+  // Rotation preview (simple)
+  const next = members[appState.next_payout_index || 0];
+  document.getElementById("nextName").textContent = next ? (next.name || next.email || "—") : "—";
+  document.getElementById("nextInfo").textContent = next ? `Next payout date: ${appState.next_payout_date || "—"}` : "—";
+
+  renderAll();
+  toast("Data refreshed");
+}
+
+/* ===========================
+   RUN PAYOUT (safe placeholder)
+   Your actual logic can replace this.
+=========================== */
+async function runPayout(){
+  if(!window.isAdmin){
+    toast("Only admin can run payout.");
+    return;
+  }
+  toast("Run Payout: connect this to your payout SQL function / insert logic.");
+}
+
+/* ===========================
+   WIRE UI
+=========================== */
+function wireUI(){
+  // Auth tabs
+  document.getElementById("tabSignIn").addEventListener("click", ()=>setAuthMode("signin"));
+  document.getElementById("tabSignUp").addEventListener("click", ()=>setAuthMode("signup"));
+
+  // Auth button
+  document.getElementById("btnAuth").addEventListener("click", ()=>{
+    if(AUTH_MODE === "signup") return signUp();
+    return signIn();
+  });
+
+  // Enter key submits
+  document.getElementById("password").addEventListener("keydown", (e)=>{
+    if(e.key === "Enter"){
+      if(AUTH_MODE === "signup") return signUp();
+      return signIn();
+    }
+  });
+
+  // Sidebar nav
+  document.getElementById("navDash").addEventListener("click", ()=>{ setActiveNav("navDash"); show("dash","Dashboard"); });
+  document.getElementById("navMembers").addEventListener("click", ()=>{ setActiveNav("navMembers"); show("members","Members"); });
+  document.getElementById("navContrib").addEventListener("click", ()=>{ setActiveNav("navContrib"); show("contrib","Contributions"); });
+  document.getElementById("navLoans").addEventListener("click", ()=>{ setActiveNav("navLoans"); show("loans","Loans"); });
+  document.getElementById("navFines").addEventListener("click", ()=>{ setActiveNav("navFines"); show("fines","Fines"); });
+  document.getElementById("navPayouts").addEventListener("click", ()=>{ setActiveNav("navPayouts"); show("payouts","Payouts"); });
+  document.getElementById("navHistory").addEventListener("click", ()=>{ setActiveNav("navHistory"); show("history","History"); });
+  document.getElementById("navFPayments").addEventListener("click", ()=>{ setActiveNav("navFPayments"); show("foundation_payments","Foundation Payments"); });
+
+  // Buttons
+  document.getElementById("btnLogout").addEventListener("click", signOut);
+  document.getElementById("btnRefresh").addEventListener("click", reloadAll);
+  document.getElementById("btnRunPayout").addEventListener("click", runPayout);
+
+  setAuthMode("signin");
 }
 
 /* ===========================
@@ -684,6 +1087,7 @@ sb.auth.onAuthStateChange(async () => {
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
+  wireUI();
   const ok = await enforceAdminGate();
   if(ok) await reloadAll();
 });
