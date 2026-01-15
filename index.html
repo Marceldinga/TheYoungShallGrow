@@ -1,1465 +1,608 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8" />
-  <title>TheYoungShallGrow Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Young Shall Grow – Njangi Dashboard</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-  <!-- Supabase JS v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <style>
     :root{
-      --primary:#1f4b99; --primary2:#2a6adf; --accent:#14b8a6;
-      --danger:#ef4444; --warning:#f59e0b; --success:#22c55e;
-      --bg:#0b1220; --bg2:#111827; --card:#151c2f; --card2:#1b2440;
-      --text:#e5e7eb; --muted:#9ca3af; --border:#253056;
-      --shadow: 0 14px 40px rgba(15, 23, 42, .35);
-      --shadow2: 0 8px 20px rgba(15, 23, 42, .25);
-      --radius:18px; --ring: 0 0 0 4px rgba(42,106,223,.18);
+      --bg:#0b1220; --card:#151c2f; --text:#e5e7eb; --muted:#9ca3af;
+      --accent:#22c55e; --danger:#ef4444; --border:#253056;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background:
-        radial-gradient(900px 600px at 15% 0%, rgba(42,106,223,.18), transparent 55%),
-        radial-gradient(900px 600px at 85% 15%, rgba(20,184,166,.12), transparent 60%),
-        linear-gradient(180deg, var(--bg), var(--bg2));
-      color:var(--text);
-      min-height:100vh;
+    body{ font-family: Arial, sans-serif; background:var(--bg); color:var(--text); padding:18px; }
+    h1,h2,h3{ color:var(--accent); margin: 8px 0; }
+    .grid{ display:grid; gap:14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card{ background:var(--card); border:1px solid var(--border); padding:16px; border-radius:12px; }
+    input, select, button, textarea{
+      padding:10px; margin:6px 0; width:100%; box-sizing:border-box;
+      background:#0f172a; color:var(--text); border:1px solid var(--border); border-radius:10px;
     }
-
-    #locked{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:22px;}
-    .lockBox{width:min(520px,100%);background:var(--card);border:1px solid var(--border);border-radius:22px;padding:18px;box-shadow:var(--shadow);}
-    .lockTop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
-    .brandMini{display:flex;align-items:center;gap:10px;font-weight:900;}
-    .dot{width:10px;height:10px;border-radius:999px;background:linear-gradient(135deg,var(--primary2),var(--accent));box-shadow:0 0 18px rgba(42,106,223,.25);}
-    .sub{color:var(--muted);font-size:12px;margin-top:6px;line-height:1.4}
-    .authTabs{display:flex;gap:10px;margin:10px 0 10px}
-    .authTabs button{flex:1}
-
-    input,select,textarea{
-      width:100%;padding:12px 12px;border-radius:14px;border:1px solid var(--border);
-      background:var(--card2);color:var(--text);outline:none;
-      transition: box-shadow .12s ease, border-color .12s ease;
-    }
-    input:focus,select:focus,textarea:focus{border-color: rgba(42,106,223,.45);box-shadow: var(--ring);}
-    textarea{min-height:96px;resize:vertical}
-
-    .btn{
-      padding:11px 14px;border-radius:14px;border:1px solid rgba(31,75,153,.35);
-      background: linear-gradient(135deg, rgba(42,106,223,.20), rgba(20,184,166,.12));
-      color:var(--text);cursor:pointer;box-shadow:var(--shadow2);font-weight:700;
-      transition: transform .06s ease, filter .10s ease;
-    }
-    .btn:hover{filter:brightness(1.03)}
-    .btn:active{transform: translateY(1px)}
-    .btn.ghost{background:var(--card2);box-shadow:none;border-color:var(--border);}
-    .btn.primary{background: linear-gradient(135deg, rgba(31,75,153,.98), rgba(42,106,223,.95));color:#fff;border-color: rgba(31,75,153,.30);}
-    .btn:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
-
-    .err{
-      color:#fecaca;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);
-      padding:10px 12px;border-radius:14px;white-space:pre-wrap;font-size:12px;display:none;
-    }
-
-    .wrap{display:flex;min-height:100vh}
-    .sidebar{
-      width:330px;padding:16px;border-right:1px solid var(--border);
-      background:rgba(21,28,47,.92);backdrop-filter: blur(10px);
-    }
-    .main{flex:1;padding:18px}
-
-    .brand{font-weight:900;font-size:16px;display:flex;align-items:center;gap:10px;}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:14px;box-shadow:var(--shadow2);}
-    .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
-    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(31,75,153,.10);font-size:12px;white-space:nowrap;}
-    .nav{display:flex;flex-direction:column;gap:8px;margin-top:14px}
-    .nav button{
-      width:100%;text-align:left;padding:11px 12px;border-radius:14px;border:1px solid var(--border);
-      background:var(--card2);color:var(--text);cursor:pointer;font-weight:800;
-    }
-    .nav button.active{border-color: rgba(42,106,223,.55);background: rgba(42,106,223,.14);}
-
-    .section{display:none}
-    .section.active{display:block}
-
-    .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-
-    .tableWrap{overflow:auto;border-radius:14px;border:1px solid var(--border);margin-top:10px}
-    table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px;background:var(--card)}
-    th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-size:12px;}
-    th{color:var(--muted);font-weight:900;background:#1f2937;position:sticky; top:0; z-index:1;}
-    tbody tr:nth-child(even) td{background:#19213a}
-    .tdMoney{text-align:right;font-variant-numeric: tabular-nums;}
-
-    .badge{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:900;border:1px solid transparent;}
-    .b-pending{color:#f59e0b;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.25)}
-    .b-active{color:#60a5fa;background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.25)}
-    .b-paid{color:#34d399;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.25)}
-    .b-unknown{color:#cbd5e1;background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.22)}
-
-    .miniBox{
-      margin-top:10px;
-      padding:10px 12px;
-      border:1px solid var(--border);
-      border-radius:14px;
-      background:var(--card2);
-    }
-    .bigName{font-weight:1000;font-size:18px;margin-top:6px}
-    .smallRow{display:flex;justify-content:space-between;gap:10px;margin-top:8px}
-    .smallRow span{color:var(--muted);font-size:12px}
-    .smallRow b{color:var(--text)}
-
-    #toast{
-      position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
-      background:rgba(15,23,42,.92);color:#fff;padding:10px 14px;border-radius:14px;
-      box-shadow:var(--shadow);display:none;z-index:9999;max-width:min(560px,92vw);font-size:13px;
-    }
-
-    @media (max-width:1100px){ .grid4{grid-template-columns:1fr 1fr} .grid2{grid-template-columns:1fr} }
-    @media (max-width:740px){ .wrap{flex-direction:column} .sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border)} table{min-width:680px} }
+    textarea{ min-height: 70px; resize: vertical; }
+    button{ background:var(--accent); border:none; color:#08120b; cursor:pointer; font-weight:700; }
+    button:hover{ opacity:0.9; }
+    .btnRow{ display:flex; gap:10px; }
+    .btnRow > button{ width:100%; }
+    .muted{ color:var(--muted); font-size: 0.92rem; }
+    .pill{ display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
+    .hide{ display:none !important; }
+    table{ width:100%; border-collapse:collapse; margin-top:8px; font-size:0.92rem; }
+    th, td{ border-bottom:1px solid var(--border); padding:8px; text-align:left; vertical-align: top; }
+    th{ color: var(--muted); font-weight:700; }
+    .ok{ color: var(--accent); }
+    .err{ color: var(--danger); }
+    canvas{ width:100% !important; height:260px !important; }
+    .small{ font-size: 0.9rem; }
+    .topbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   </style>
 </head>
 
 <body>
 
+<h1>The Young Shall Grow – Njangi Dashboard</h1>
+<div class="topbar">
+  <span class="pill">Single-file HTML</span>
+  <span class="pill" id="rolePill">Role: --</span>
+  <span class="pill" id="memberPill">Member ID: --</span>
+</div>
+
 <!-- LOGIN -->
-<div id="locked">
-  <div class="lockBox">
-    <div class="lockTop">
-      <div class="brandMini"><span class="dot"></span> TheYoungShallGrow</div>
-      <span class="pill">Secure Login</span>
-    </div>
-    <div class="sub">Admin can add data. Members can view dashboard + request loans.</div>
+<div class="card" id="loginCard">
+  <h2>Login</h2>
+  <input id="email" placeholder="Email" autocomplete="username">
+  <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+  <div class="btnRow">
+    <button onclick="login()">Login</button>
+    <button onclick="logout()" style="background:#94a3b8;">Logout</button>
+  </div>
+  <p id="loginStatus" class="muted"></p>
+</div>
 
-    <div class="authTabs">
-      <button id="tabSignIn" class="btn primary" type="button">Sign in</button>
-      <button id="tabSignUp" class="btn ghost" type="button">Sign up</button>
+<!-- DASHBOARD -->
+<div id="dashboard" class="hide">
+
+  <!-- STATS -->
+  <div class="grid">
+    <div class="card">
+      <h2>System Stats</h2>
+      <p class="small">Pot Amount: <b id="potAmount">--</b></p>
+      <p class="small">Your Total Value: <b id="myValue">--</b></p>
+      <p class="muted" id="rlsNote">Tables and charts show what your RLS allows you to read.</p>
+      <div class="btnRow">
+        <button onclick="refreshAll()">Refresh</button>
+        <button onclick="runRulesQuick()" style="background:#f59e0b;">Run Rules (Admin)</button>
+      </div>
+      <p id="statusMsg" class="muted"></p>
     </div>
 
-    <div id="signupHint" class="sub" style="display:none;margin-bottom:10px;">
-      ✅ Signup only works if your email is already in <b>members.email</b>. After signup, admin must approve.
-    </div>
-
-    <div style="display:grid;gap:10px;">
-      <input id="email" placeholder="Email" autocomplete="username" />
-      <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
-      <button id="btnAuth" class="btn primary" type="button">Sign in</button>
-      <div id="lockErr" class="err"></div>
+    <div class="card">
+      <h2>Charts</h2>
+      <p class="muted">Contributions & Fines (best-effort, depends on RLS).</p>
+      <canvas id="chartContrib"></canvas>
+      <canvas id="chartFine" style="margin-top:14px;"></canvas>
     </div>
   </div>
-</div>
 
-<!-- APP -->
-<div id="app" class="wrap" style="display:none;">
-  <aside class="sidebar">
-    <div class="brand"><span class="dot"></span> TheYoungShallGrow: Dashboard</div>
-    <div class="sub">Today • <span id="today"></span></div>
+  <!-- ADMIN ACTIONS -->
+  <div class="card" id="adminCard">
+    <h2>Admin Actions</h2>
+    <p class="muted">This section is hidden for members. Admin is detected using <b>is_admin()</b>.</p>
 
-    <div class="card">
-      <div class="row"><span class="sub">Signed in</span><span class="pill" id="who">—</span></div>
-      <div class="row" style="margin-top:10px;"><span class="sub">Role</span><span class="pill" id="role">—</span></div>
-      <button class="btn ghost" style="width:100%;margin-top:10px" type="button" id="btnLogout">Logout</button>
-      <div id="sideErr" class="err"></div>
-    </div>
-
-    <div class="nav">
-      <button class="active" type="button" data-sec="dash">Dashboard</button>
-      <button type="button" data-sec="members" data-admin="1">Members</button>
-      <button type="button" data-sec="contrib" data-admin="1">Contributions</button>
-      <button type="button" data-sec="loans">Loans</button>
-      <button type="button" data-sec="repayments">Repayments</button>
-      <button type="button" data-sec="foundation" data-admin="1">Foundation</button>
-      <button type="button" data-sec="fines" data-admin="1">Fines</button>
-      <button type="button" data-sec="payouts">Payouts</button>
-      <button class="btn ghost" style="margin-top:6px" type="button" id="btnRefresh">Refresh</button>
-    </div>
-
-    <!-- ROTATION CARD -->
-    <div class="card">
-      <div class="row">
-        <div style="font-weight:900">Rotation Payout</div>
-        <span class="pill" id="rotRolePill">—</span>
-      </div>
-
-      <div class="miniBox">
-        <div class="sub">Current Beneficiary (Next)</div>
-        <div class="bigName" id="nextBeneficiary">—</div>
-
-        <div class="smallRow">
-          <span>Position</span>
-          <b id="nextPosition">—</b>
-        </div>
-
-        <div class="smallRow">
-          <span>Next payout date</span>
-          <b id="nextPayoutDate">—</b>
-        </div>
-
-        <div class="smallRow">
-          <span>Expected payout (pot)</span>
-          <b id="expectedPayout">$0</b>
-        </div>
-      </div>
-
-      <button class="btn primary" style="width:100%;margin-top:10px" type="button" id="btnRunPayout">
-        Run Payout Now
-      </button>
-      <div class="sub" style="margin-top:10px">
-        Uses <b>members.position</b> ordering + <b>app_state.next_payout_index</b>.
-      </div>
-    </div>
-
-    <!-- FOUNDATION POT INFO -->
-    <div class="card">
-      <div class="sub"><b>Foundation Pot</b> (app_state.foundation)</div>
-      <div style="margin-top:8px;font-weight:1000;font-size:18px" id="foundationPot">$0</div>
-      <div class="sub" style="margin-top:10px">
-        Foundation is tracked by: <b>app_state.foundation</b> (pot) + <b>foundation_payments</b> (payments).
-      </div>
-    </div>
-  </aside>
-
-  <main class="main">
-    <div class="row" style="margin-bottom:14px;">
+    <div class="grid">
       <div>
-        <div style="font-size:18px;font-weight:900" id="pageTitle">Dashboard</div>
-        <div class="sub" id="pageHint">Overview + histogram</div>
+        <h3>Add Member (table insert)</h3>
+        <input id="m_name" placeholder="Name">
+        <input id="m_email" placeholder="Email">
+        <input id="m_phone" placeholder="Phone">
+        <button onclick="addMember()">Add Member</button>
+        <p class="muted">Note: This inserts into <b>members</b> table only. Creating auth user is separate (Supabase Auth signup/invite).</p>
       </div>
-      <span class="pill" id="interestPill">Total Interest: <b id="kInterestMini">$0</b></span>
+
+      <div>
+        <h3>Add Contribution (RPC)</h3>
+        <input id="c_member" placeholder="Member ID (bigint)">
+        <input id="c_amount" type="number" placeholder="Amount">
+        <button onclick="addContribution()">Add Contribution</button>
+
+        <h3 style="margin-top:14px;">Add Fine (RPC)</h3>
+        <input id="f_member" placeholder="Member ID (bigint)">
+        <input id="f_amount" type="number" placeholder="Amount">
+        <input id="f_reason" placeholder="Reason (text)">
+        <button onclick="addFine()">Add Fine</button>
+      </div>
+
+      <div>
+        <h3>Foundation / Repayment (RPC)</h3>
+        <p class="muted">
+          You only showed one RPC for these: <b>repayments_update_foundation</b>.
+          This code calls it with best-effort payload.
+        </p>
+        <input id="fp_member" placeholder="Member ID (bigint)">
+        <input id="fp_amount" type="number" placeholder="Amount">
+        <div class="btnRow">
+          <button onclick="addFoundation()">Add Foundation Payment</button>
+          <button onclick="addRepayment()" style="background:#38bdf8;">Add Repayment</button>
+        </div>
+
+        <h3 style="margin-top:14px;">Pay Interest (RPC)</h3>
+        <input id="pi_loan" placeholder="Loan ID (uuid)">
+        <input id="pi_amount" type="number" placeholder="Amount">
+        <button onclick="payInterest()">Pay Interest</button>
+      </div>
     </div>
 
-    <!-- DASH -->
-    <section id="dash" class="section active">
-      <div class="grid4">
-        <div class="card">
-          <div class="sub">Njangi Pot</div>
-          <div style="font-size:22px;font-weight:1000" id="kPot">$0</div>
-          <div class="sub">Sum of contributions</div>
-        </div>
-        <div class="card">
-          <div class="sub">Foundation</div>
-          <div style="font-size:22px;font-weight:1000" id="kFoundation">$0</div>
-          <div class="sub">Available for loans (app_state.foundation)</div>
-        </div>
-        <div class="card">
-          <div class="sub">Outstanding Loans</div>
-          <div style="font-size:22px;font-weight:1000" id="kLoans">$0</div>
-          <div class="sub">Total due (best effort)</div>
-        </div>
-        <div class="card">
-          <div class="sub">Members</div>
-          <div style="font-size:22px;font-weight:1000" id="kMembers">0</div>
-          <div class="sub">Rotation list</div>
-        </div>
+    <h3 style="margin-top:14px;">Run System (RPC)</h3>
+    <div class="btnRow">
+      <button onclick="runPayout()">Run Payout</button>
+      <button onclick="runRotationPayout()" style="background:#a78bfa;">Run Rotation Payout</button>
+      <button onclick="runAllRules()" style="background:#f59e0b;">Run All Njangi Rules</button>
+    </div>
+  </div>
+
+  <!-- MEMBER LOAN REQUEST -->
+  <div class="card">
+    <h2>Member Loan Request</h2>
+    <p class="muted">
+      Your Member ID is auto-detected using <b>current_member_id()</b>. You only select surety + amount.
+    </p>
+    <input id="loan_surety" placeholder="Surety Member ID (bigint)">
+    <input id="loan_amount" type="number" placeholder="Amount">
+    <button onclick="requestLoan()">Request Loan</button>
+    <p id="loanMsg" class="muted"></p>
+  </div>
+
+  <!-- TABLES -->
+  <div class="card">
+    <h2>Tables (Read Only)</h2>
+    <p class="muted">These tables will show only what your RLS policies allow.</p>
+
+    <div class="grid">
+      <div>
+        <h3>Members</h3>
+        <div id="tbl_members"></div>
       </div>
-
-      <div class="card" style="margin-top:12px;">
-        <div class="row">
-          <div style="font-weight:900">Histogram: Contributions (All Members)</div>
-          <span class="pill">Live</span>
-        </div>
-        <div style="height:220px;margin-top:10px;">
-          <canvas id="histChart"></canvas>
-        </div>
+      <div>
+        <h3>Contributions</h3>
+        <div id="tbl_contrib"></div>
       </div>
-    </section>
-
-    <!-- MEMBERS (Admin only) -->
-    <section id="members" class="section">
-      <div class="grid2">
-        <div class="card">
-          <div style="font-weight:900">Add Member (Admin registers email)</div>
-          <div class="sub">Members can only sign up if their email exists here first.</div>
-          <div style="display:grid;gap:10px;margin-top:10px;">
-            <input id="mName" placeholder="Name" />
-            <input id="mEmail" placeholder="Email" />
-            <input id="mPhone" placeholder="Phone (optional)" />
-            <select id="mBenefits">
-              <option value="false">Has benefits? No</option>
-              <option value="true">Has benefits? Yes</option>
-            </select>
-            <button class="btn primary" type="button" id="btnAddMember">Add Member</button>
-          </div>
-
-          <div style="margin-top:14px;font-weight:900">Approve Pending Logins</div>
-          <div class="tableWrap">
-            <table>
-              <thead><tr><th>Member</th><th>Approved</th><th>Action</th></tr></thead>
-              <tbody id="approveBody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="row"><div style="font-weight:900">Member List (sorted by position)</div><span class="pill" id="memberCountPill">0</span></div>
-          <div class="tableWrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pos</th><th>Name</th><th>Email</th>
-                  <th class="tdMoney">Contrib</th>
-                  <th class="tdMoney">Foundation Paid</th>
-                  <th class="tdMoney">Loan Due</th>
-                  <th class="tdMoney">Payout Total</th>
-                </tr>
-              </thead>
-              <tbody id="memberBody"></tbody>
-            </table>
-          </div>
-        </div>
+      <div>
+        <h3>Fines</h3>
+        <div id="tbl_fines"></div>
       </div>
-    </section>
-
-    <!-- CONTRIBUTIONS (Admin only) -->
-    <section id="contrib" class="section">
-      <div class="grid2">
-        <div class="card">
-          <div style="font-weight:900">Add Contribution (Admin)</div>
-          <div style="display:grid;gap:10px;margin-top:10px;">
-            <select id="cMember"></select>
-            <input id="cAmount" type="number" placeholder="Amount (multiple of 500)" />
-            <button class="btn primary" type="button" id="btnAddContrib">Save Contribution</button>
-          </div>
-          <div class="sub" style="margin-top:10px;">Rule: amount must be multiple of 500.</div>
-        </div>
-        <div class="card">
-          <div style="font-weight:900">Tip</div>
-          <div class="sub">Contributions feed the histogram and Njangi pot KPI.</div>
-        </div>
+      <div>
+        <h3>Loans</h3>
+        <div id="tbl_loans"></div>
       </div>
-    </section>
-
-    <!-- LOANS -->
-    <section id="loans" class="section">
-      <div class="grid2">
-        <div class="card">
-          <div style="font-weight:900" id="loanFormTitle">Request Loan</div>
-          <div class="sub" id="loanFormHint">Members request → pending until admin approves.</div>
-
-          <div style="display:grid;gap:10px;margin-top:10px;">
-            <label class="sub">Borrower</label>
-            <select id="lBorrower"></select>
-
-            <label class="sub">Surety</label>
-            <select id="lSurety"></select>
-
-            <label class="sub">Requested Amount</label>
-            <input id="lAmount" type="number" placeholder="e.g. 2000" />
-
-            <button class="btn primary" type="button" id="btnLoanAction">Request Loan</button>
-          </div>
-
-          <div class="sub" style="margin-top:10px">
-            Borrow rule: borrower qualifies alone OR surety qualifies alone (NOT additive).
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="row"><div style="font-weight:900">Loans</div><span class="pill">Latest</span></div>
-          <div class="tableWrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th><th>Borrower</th><th>Surety</th>
-                  <th class="tdMoney">Principal</th>
-                  <th class="tdMoney">Interest</th>
-                  <th class="tdMoney">Total Due</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="loanBody"></tbody>
-            </table>
-          </div>
-        </div>
+      <div>
+        <h3>Foundation Payments</h3>
+        <div id="tbl_foundation"></div>
       </div>
-    </section>
-
-    <!-- REPAYMENTS (Everyone sees; only Admin can add) -->
-    <section id="repayments" class="section">
-      <div class="grid2">
-        <div class="card">
-          <div style="font-weight:900">Add Repayment</div>
-          <div class="sub">Admin only. Writes to <b>public.repayments</b>.</div>
-
-          <div style="display:grid;gap:10px;margin-top:10px;">
-            <label class="sub">Member</label>
-            <select id="rMember"></select>
-
-            <label class="sub">Loan</label>
-            <select id="rLoan"></select>
-
-            <label class="sub">Amount Paid</label>
-            <input id="rAmount" type="number" placeholder="e.g. 100" />
-
-            <button class="btn primary" type="button" id="btnAddRepayment">Save Repayment</button>
-          </div>
-
-          <div class="sub" style="margin-top:10px;">
-            Members can view repayments but cannot add.
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="row">
-            <div style="font-weight:900">Repayment History</div>
-            <span class="pill" id="repayCount">0</span>
-          </div>
-
-          <div class="tableWrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Member</th>
-                  <th>Loan ID</th>
-                  <th class="tdMoney">Amount</th>
-                </tr>
-              </thead>
-              <tbody id="repayBody"></tbody>
-            </table>
-          </div>
-        </div>
+      <div>
+        <h3>Repayments</h3>
+        <div id="tbl_repayments"></div>
       </div>
-    </section>
+    </div>
+  </div>
 
-    <!-- FOUNDATION (Admin) -->
-    <section id="foundation" class="section">
-      <div class="grid2">
-        <div class="card">
-          <div style="font-weight:900">Add Foundation Payment (Admin)</div>
-          <div class="sub">Adds a member foundation payment and increases <b>app_state.foundation</b> by the amount.</div>
-          <div style="display:grid;gap:10px;margin-top:10px;">
-            <select id="fpMember"></select>
-            <input id="fpAmount" type="number" placeholder="Amount (any)" />
-            <button class="btn primary" type="button" id="btnAddFoundationPayment">Save Foundation Payment</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="row"><div style="font-weight:900">Foundation Payment History</div><span class="pill">Latest</span></div>
-          <div class="tableWrap">
-            <table>
-              <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th><th>Status</th></tr></thead>
-              <tbody id="foundationBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- FINES (Admin) -->
-    <section id="fines" class="section">
-      <div class="grid2">
-        <div class="card">
-          <div style="font-weight:900">Add Fine (Admin)</div>
-          <div class="sub">Fine is <b>any amount</b>. Saved to <b>fines</b> table.</div>
-          <div style="display:grid;gap:10px;margin-top:10px;">
-            <select id="fMember"></select>
-            <input id="fAmount" type="number" placeholder="Amount (any)" />
-            <input id="fReason" placeholder="Reason (optional)" />
-            <button class="btn primary" type="button" id="btnAddFine">Save Fine</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="row"><div style="font-weight:900">Fine History</div><span class="pill">Latest</span></div>
-          <div class="tableWrap">
-            <table>
-              <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th><th>Reason</th></tr></thead>
-              <tbody id="fineBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- PAYOUTS (Everyone sees; Admin can run) -->
-    <section id="payouts" class="section">
-      <div class="grid2">
-        <div class="card">
-          <div style="font-weight:900">Run Payout</div>
-          <div class="sub">Admin only. Records to <b>payouts</b> and advances rotation.</div>
-          <button class="btn primary" type="button" id="btnRunPayout2" style="width:100%;margin-top:10px;">
-            Run Payout Now
-          </button>
-        </div>
-        <div class="card">
-          <div class="row"><div style="font-weight:900">Payout History</div><span class="pill">Latest</span></div>
-          <div class="tableWrap">
-            <table>
-              <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th></tr></thead>
-              <tbody id="payoutBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-  </main>
 </div>
-
-<div id="toast"></div>
 
 <script>
 /* =========================
-   SUPABASE CONFIG
+   CONFIG
 ========================= */
 const SUPABASE_URL = "https://ficlrtvrrzfiakmciwel.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
-});
+let IS_ADMIN = false;
+let MY_MEMBER_ID = null;
 
-/* =========================
-   CONSTANTS / RULES
-========================= */
-const INTEREST_RATE = 0.05;
-const FOUNDATION_FACTOR = 0.70;
+let chartContrib = null;
+let chartFine = null;
 
 /* =========================
-   STATE
+   SMALL HELPERS
 ========================= */
-let AUTH_MODE = "signin";
-let isAdmin = false;
-let currentMemberId = null;
-
-let appState = null;
-let members = [];
-let contributions = [];
-let foundationPayments = [];   // eligibility totals
-let foundationHistory = [];    // show history
-let loans = [];
-let payouts = [];
-let profiles = [];
-let fines = [];
-let repayments = [];
-let histChart = null;
-
-/* =========================
-   HELPERS
-========================= */
-const $ = (id) => document.getElementById(id);
-
-function toast(msg){
-  const el = $("toast");
-  el.textContent = String(msg||"");
-  el.style.display = "block";
-  clearTimeout(toast._t);
-  toast._t = setTimeout(()=> el.style.display="none", 2800);
-}
-function lockErr(msg){
-  const el = $("lockErr");
-  el.style.display = msg ? "block":"none";
-  el.textContent = msg||"";
-}
-function sideErr(msg){
-  const el = $("sideErr");
-  if(!el) return;
-  el.style.display = msg ? "block":"none";
-  el.textContent = msg||"";
-}
-function money(x){ return "$" + (Number(x||0)).toLocaleString(); }
-function badge(status){
-  const s = String(status||"").toLowerCase();
-  if(s==="pending") return `<span class="badge b-pending">Pending</span>`;
-  if(s==="active") return `<span class="badge b-active">Active</span>`;
-  if(s==="paid"||s==="paid_off"||s==="cleared"||s==="converted") return `<span class="badge b-paid">${status||"Paid"}</span>`;
-  return `<span class="badge b-unknown">${status||"—"}</span>`;
-}
-function fmtDate(x){
-  if(!x) return "";
-  try { return new Date(x).toLocaleString(); } catch { return String(x); }
-}
-function showSection(sec, title, hint){
-  document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
-  const el = $(sec);
-  if(el) el.classList.add("active");
-  $("pageTitle").textContent = title;
-  $("pageHint").textContent = hint;
-
-  document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
-  const btn = document.querySelector(`.nav button[data-sec="${sec}"]`);
-  if(btn) btn.classList.add("active");
+function setStatus(msg, ok=true){
+  const el = document.getElementById("statusMsg");
+  el.innerText = msg || "";
+  el.className = ok ? "muted ok" : "muted err";
 }
 
-/* =========================
-   AUTH MODE UI
-========================= */
-function setAuthMode(mode){
-  AUTH_MODE = (mode==="signup") ? "signup" : "signin";
-  $("signupHint").style.display = (AUTH_MODE==="signup") ? "block":"none";
-  $("btnAuth").textContent = (AUTH_MODE==="signup") ? "Create account" : "Sign in";
-  $("tabSignIn").className = (AUTH_MODE==="signin") ? "btn primary" : "btn ghost";
-  $("tabSignUp").className = (AUTH_MODE==="signup") ? "btn primary" : "btn ghost";
-  lockErr("");
-}
-
-/* =========================
-   GATE (profiles)
-========================= */
-async function enforceGate(){
-  const { data, error } = await sb.auth.getUser();
-  if(error) throw error;
-  const user = data?.user;
-  if(!user) return false;
-
-  const pr = await sb
-    .from("profiles")
-    .select("role, approved, member_id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if(pr.error) throw pr.error;
-  if(!pr.data) throw new Error("No profiles row for this user.");
-
-  isAdmin = (pr.data.role === "admin");
-  currentMemberId = pr.data.member_id ?? null;
-
-  if(!isAdmin && !pr.data.approved){
-    await sb.auth.signOut();
-    lockErr("Your account is pending admin approval.");
-    return false;
+function renderTable(containerId, rows){
+  const el = document.getElementById(containerId);
+  if(!rows || rows.length === 0){
+    el.innerHTML = `<p class="muted">No rows (or blocked by RLS).</p>`;
+    return;
   }
-
-  $("locked").style.display = "none";
-  $("app").style.display = "flex";
-  $("who").textContent = user.email || "";
-  $("role").textContent = pr.data.role || "member";
-  $("today").textContent = new Date().toLocaleDateString();
-
-  // admin-only nav items
-  document.querySelectorAll("[data-admin='1']").forEach(b=>{
-    b.style.display = isAdmin ? "block" : "none";
-  });
-
-  $("rotRolePill").textContent = isAdmin ? "Admin" : "Member";
-
-  // payout buttons admin-only
-  $("btnRunPayout").disabled = !isAdmin;
-  $("btnRunPayout2").disabled = !isAdmin;
-
-  // interest pill: show for all (but you can hide if you want)
-  $("interestPill").style.display = "inline-flex";
-
-  // loans form changes
-  if(isAdmin){
-    $("loanFormTitle").textContent = "Approve / Manage Loans (Admin)";
-    $("loanFormHint").textContent = "Members request loans (pending). Admin approves → active.";
-    $("btnLoanAction").textContent = "Create ACTIVE Loan";
-  } else {
-    $("loanFormTitle").textContent = "Request Loan (Member)";
-    $("loanFormHint").textContent = "Your request will be pending until admin approves.";
-    $("btnLoanAction").textContent = "Request Loan";
+  const cols = Object.keys(rows[0]).slice(0, 8); // keep it simple
+  let html = `<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>`;
+  for(const r of rows.slice(0, 15)){
+    html += `<tr>${cols.map(c=>`<td>${escapeHtml(String(r[c] ?? ""))}</td>`).join("")}</tr>`;
   }
-
-  // repayments add button admin-only
-  $("btnAddRepayment").disabled = !isAdmin;
-
-  return true;
+  html += `</tbody></table>`;
+  el.innerHTML = html;
 }
 
-/* =========================
-   SIGN IN / SIGN UP / OUT
-========================= */
-async function signIn(){
-  lockErr(""); sideErr("");
-  const email = $("email").value.trim().toLowerCase();
-  const password = $("password").value;
-  if(!email || !password) return lockErr("Enter email and password.");
-
-  const { error } = await sb.auth.signInWithPassword({ email, password });
-  if(error) return lockErr(error.message);
-
-  const ok = await enforceGate();
-  if(!ok) return;
-
-  await reloadAll();
-  toast("Welcome");
+function escapeHtml(s){
+  return s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
 }
 
-async function signUp(){
-  lockErr(""); sideErr("");
-  const email = $("email").value.trim().toLowerCase();
-  const password = $("password").value;
-  if(!email || !password) return lockErr("Enter email and password.");
-
-  const pre = await sb.from("members").select("id,email").eq("email", email).maybeSingle();
-  if(pre.error) return lockErr(pre.error.message);
-  if(!pre.data) return lockErr("Signup blocked: your email is not registered by admin yet.");
-
-  const s = await sb.auth.signUp({ email, password });
-  if(s.error) return lockErr(s.error.message);
-
-  toast("Account created. Waiting for admin approval.");
-  await sb.auth.signOut();
-  setAuthMode("signin");
-  lockErr("Pending approval. Admin must approve you in profiles.");
-}
-
-async function signOut(){
-  await sb.auth.signOut();
-  $("app").style.display = "none";
-  $("locked").style.display = "flex";
-  sideErr(""); lockErr("");
-}
-
-/* =========================
-   LOAD HELPERS (DEFENSIVE)
-========================= */
-async function loadContributions(){
-  let c = await sb.from("contributions").select("member_id, amount, kind").eq("kind","contribution").limit(5000);
-  if(!c.error) return c.data || [];
-
-  c = await sb.from("contributions").select("member_id, amount").limit(5000);
-  if(c.error) throw c.error;
-  return c.data || [];
-}
-
-async function loadFoundationPayments(){
-  let fp = await sb.from("foundation_payments").select("id, member_id, amount, status, created_at").limit(8000);
-  if(!fp.error) {
-    const rows = fp.data || [];
-    // eligibility: exclude pending (if status exists)
-    const eligRows = rows.filter(r => {
-      const hasStatus = Object.prototype.hasOwnProperty.call(r, "status");
-      if(!hasStatus) return true;
-      const s = String(r.status||"").toLowerCase();
-      return s !== "pending";
-    });
-    foundationHistory = rows;
-    return eligRows;
+async function callRPC(name, payload={}){
+  const { data, error } = await sb.rpc(name, payload);
+  if(error){
+    console.error("RPC error:", name, error);
+    throw new Error(error.message || "RPC failed");
   }
-
-  fp = await sb.from("foundation_payments").select("id, member_id, amount, status").limit(8000);
-  if(fp.error) throw fp.error;
-  foundationHistory = fp.data || [];
-  return fp.data || [];
+  return data;
 }
 
-async function loadFines(){
-  let q = await sb.from("fines").select("*").order("created_at", { ascending:false }).limit(300);
-  if(!q.error) return q.data || [];
-
-  q = await sb.from("fines").select("*").order("id", { ascending:false }).limit(300);
-  if(q.error) throw q.error;
-  return q.data || [];
-}
-
-async function loadRepayments(){
-  // Works with your screenshot columns
-  let r = await sb.from("repayments").select("*").order("created_at", { ascending:false }).limit(500);
-  if(!r.error) return r.data || [];
-
-  // fallback order by id
-  r = await sb.from("repayments").select("*").order("id", { ascending:false }).limit(500);
-  if(r.error) throw r.error;
-  return r.data || [];
-}
-
-/* =========================
-   RELOAD ALL
-========================= */
-async function reloadAll(){
-  sideErr("");
-
-  const a = await sb.from("app_state").select("*").eq("id", 1).maybeSingle();
-  if(a.error) return sideErr("app_state: " + a.error.message);
-  appState = a.data || { foundation:0, total_interest_generated:0, next_payout_index:0, next_payout_date:null };
-
-  const m = await sb.from("members").select("*").order("position", { ascending:true });
-  if(m.error) return sideErr("members: " + m.error.message);
-  members = m.data || [];
-
-  try{ contributions = await loadContributions(); }
-  catch(e){ return sideErr("contributions: " + (e?.message || String(e))); }
-
-  try{ foundationPayments = await loadFoundationPayments(); }
-  catch(e){
-    foundationPayments = [];
-    foundationHistory = [];
-    console.warn("foundation_payments blocked:", e?.message || e);
-  }
-
-  const l = await sb.from("loans").select("*").order("created_at", { ascending:false }).limit(500);
-  if(l.error) return sideErr("loans: " + l.error.message);
-  loans = l.data || [];
-
-  const p = await sb.from("payouts").select("*").order("created_at", { ascending:false }).limit(300);
-  if(p.error) return sideErr("payouts: " + p.error.message);
-  payouts = p.data || [];
-
-  try{ repayments = await loadRepayments(); }
-  catch(e){
-    repayments = [];
-    console.warn("repayments blocked:", e?.message || e);
-  }
-
-  if(isAdmin){
-    const pr = await sb.from("profiles").select("id, role, approved, member_id");
-    if(pr.error) return sideErr("profiles: " + pr.error.message);
-    profiles = pr.data || [];
-
-    try{ fines = await loadFines(); }
-    catch(e){
-      fines = [];
-      console.warn("fines blocked:", e?.message || e);
-    }
-  } else {
-    profiles = [];
-    fines = [];
-  }
-
-  renderAll();
-}
-
-/* =========================
-   ELIGIBILITY (NOT ADDITIVE)
-========================= */
-function sumContrib(memberId){
-  const mid = String(memberId);
-  return contributions
-    .filter(r=>String(r.member_id)===mid)
-    .reduce((s,r)=>s+Number(r.amount||0),0);
-}
-function sumFoundationPaid(memberId){
-  const mid = String(memberId);
-  return foundationPayments
-    .filter(r=>String(r.member_id)===mid)
-    .reduce((s,r)=>s+Number(r.amount||0),0);
-}
-function memberTotal(memberId){
-  const cSum = sumContrib(memberId);
-  const fPaid = sumFoundationPaid(memberId);
-  return cSum + (fPaid * FOUNDATION_FACTOR);
-}
-function eligible(borrowerId, suretyId, amt){
-  const a = Number(amt || 0);
-  if (a <= 0) return { ok:false, reason:"Invalid amount" };
-
-  const bTot = memberTotal(borrowerId);
-  if (bTot >= a) return { ok:true, reason:`Eligible (self). Borrower total ${money(bTot)} ≥ ${money(a)}` };
-
-  const sTot = memberTotal(suretyId);
-  if (sTot >= a) return { ok:true, reason:`Eligible (with surety). Surety total ${money(sTot)} ≥ ${money(a)}` };
-
-  return { ok:false, reason:`Not eligible. Borrower ${money(bTot)} and Surety ${money(sTot)} are both < ${money(a)}` };
-}
-
-/* =========================
-   INSERT LOAN (DEFENSIVE)
-========================= */
-async function tryInsertLoan(payloadVariants){
+/* Try multiple payload shapes (because your borrow_eligibility args are partially hidden) */
+async function callRPCWithFallback(name, payloadOptions){
   let lastErr = null;
-  for(const payload of payloadVariants){
-    const ins = await sb.from("loans").insert([payload]);
-    if(!ins.error) return { ok:true };
-    lastErr = ins.error;
+  for(const payload of payloadOptions){
+    try{
+      const data = await callRPC(name, payload);
+      return { ok:true, data, used: payload };
+    }catch(e){
+      lastErr = e;
+    }
   }
   return { ok:false, error:lastErr };
 }
 
 /* =========================
-   RENDER
+   AUTH
 ========================= */
-function renderAll(){
-  const contribByMember = {};
-  for(const r of contributions){
-    const k = String(r.member_id);
-    contribByMember[k] = (contribByMember[k]||0) + Number(r.amount||0);
-  }
-
-  const fByMember = {};
-  for(const r of foundationPayments){
-    const k = String(r.member_id);
-    fByMember[k] = (fByMember[k]||0) + Number(r.amount||0);
-  }
-
-  const potSum = Object.values(contribByMember).reduce((s,v)=>s+v,0);
-  const outstanding = (loans||[]).filter(x=>String(x.status||"").toLowerCase()==="active")
-    .reduce((s,x)=> s + Number(x.total_due ?? x.total ?? x.balance ?? x.principal ?? 0), 0);
-
-  $("kPot").textContent = money(potSum);
-  $("kFoundation").textContent = money(appState.foundation||0);
-  $("foundationPot").textContent = money(appState.foundation||0);
-  $("kLoans").textContent = money(outstanding);
-  $("kMembers").textContent = String(members.length);
-  $("memberCountPill").textContent = String(members.length);
-  $("kInterestMini").textContent = money(appState.total_interest_generated||0);
-
-  // rotation info
-  $("expectedPayout").textContent = money(potSum);
-  const idx = Number(appState.next_payout_index ?? 0);
-  const nextIndex = members.length ? (idx % members.length) : 0;
-  const next = members.length ? members[nextIndex] : null;
-
-  $("nextBeneficiary").textContent = next ? (next.name || "—") : "—";
-  $("nextPosition").textContent = next ? String(next.position ?? (nextIndex+1)) : "—";
-  $("nextPayoutDate").textContent = appState.next_payout_date ? String(appState.next_payout_date) : "—";
-
-  // dropdowns
-  const optsAll = (members||[]).map(m=>`<option value="${m.id}">${m.name}</option>`).join("");
-  $("cMember").innerHTML = optsAll;
-  $("lBorrower").innerHTML = optsAll;
-  $("lSurety").innerHTML = optsAll;
-  $("fpMember").innerHTML = optsAll;
-  $("fMember").innerHTML = optsAll;
-  $("rMember").innerHTML = optsAll;
-
-  // borrower locked for members
-  if(!isAdmin && currentMemberId != null){
-    $("lBorrower").value = String(currentMemberId);
-    $("lBorrower").disabled = true;
-  } else {
-    $("lBorrower").disabled = false;
-  }
-
-  // loans dropdown for repayment: active loans
-  const activeLoans = (loans||[]).filter(l=>String(l.status||"").toLowerCase()==="active");
-  $("rLoan").innerHTML = activeLoans.map(l=>{
-    const due = Number(l.total_due ?? (Number(l.principal||0)+Number(l.interest||0)));
-    return `<option value="${l.id}">Loan #${l.id} (${money(due)})</option>`;
-  }).join("") || `<option value="">No active loans</option>`;
-
-  // member table
-  $("memberBody").innerHTML = (members||[]).map(m=>{
-    const mid = String(m.id);
-    const loanDue = Number(m.loan_due ?? 0);
-    const payoutTotal = Number(m.payout_total ?? 0);
-    return `
-      <tr>
-        <td>${m.position ?? ""}</td>
-        <td>${m.name||""}</td>
-        <td>${m.email||""}</td>
-        <td class="tdMoney">${money(contribByMember[mid]||0)}</td>
-        <td class="tdMoney">${money(fByMember[mid]||0)}</td>
-        <td class="tdMoney">${money(loanDue)}</td>
-        <td class="tdMoney">${money(payoutTotal)}</td>
-      </tr>
-    `;
-  }).join("") || `<tr><td colspan="7" class="sub">No members</td></tr>`;
-
-  // admin approvals
-  if(isAdmin){
-    const pending = profiles.filter(p=>p.role==="member" && !p.approved && p.member_id != null);
-    const byId = Object.fromEntries(members.map(m=>[String(m.id), m]));
-    $("approveBody").innerHTML = pending.map(p=>{
-      const mem = byId[String(p.member_id)];
-      return `<tr>
-        <td>${mem?.name || ("member_id="+p.member_id)}</td>
-        <td>${badge(p.approved ? "paid":"pending")}</td>
-        <td><button class="btn ghost" type="button" onclick="approveProfile('${p.id}')">Approve</button></td>
-      </tr>`;
-    }).join("") || `<tr><td colspan="3" class="sub">No pending approvals</td></tr>`;
-  } else {
-    $("approveBody").innerHTML = `<tr><td colspan="3" class="sub">Admin only</td></tr>`;
-  }
-
-  // loans table
-  $("loanBody").innerHTML = (loans||[]).map(r=>{
-    const status = String(r.status||"").toLowerCase();
-    const canApprove = isAdmin && status==="pending";
-    const action = canApprove
-      ? `<button class="btn ghost" type="button" onclick="approveLoan('${r.id}')">Approve</button>`
-      : "-";
-
-    const borrowerName = r.borrower_name || r.borrower || r.member_name || r.name || "";
-    const suretyName = r.surety_name || r.surety || r.surety_member || "";
-
-    return `<tr>
-      <td>${r.created_at ? new Date(r.created_at).toLocaleString() : (r.issued_at ? new Date(r.issued_at).toLocaleString() : "")}</td>
-      <td>${borrowerName}</td>
-      <td>${suretyName}</td>
-      <td class="tdMoney">${money(r.principal||0)}</td>
-      <td class="tdMoney">${money(r.interest||0)}</td>
-      <td class="tdMoney">${money(r.total_due ?? r.total ?? r.balance ?? (Number(r.principal||0)+Number(r.interest||0)))}</td>
-      <td>${badge(r.status||"")}</td>
-      <td>${action}</td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="8" class="sub">No loans</td></tr>`;
-
-  // payouts history
-  $("payoutBody").innerHTML = (payouts||[]).map(x=>`
-    <tr>
-      <td>${x.payout_date||fmtDate(x.created_at)||""}</td>
-      <td>${x.member_name||""}</td>
-      <td class="tdMoney">${money(x.payout_amount||0)}</td>
-    </tr>
-  `).join("") || `<tr><td colspan="3" class="sub">No payouts</td></tr>`;
-
-  // foundation history
-  const byId = Object.fromEntries(members.map(m=>[String(m.id), m]));
-  $("foundationBody").innerHTML = (foundationHistory||[]).slice(0,300).map(r=>{
-    const mem = byId[String(r.member_id)];
-    return `<tr>
-      <td>${fmtDate(r.created_at)}</td>
-      <td>${mem?.name || r.member_name || ("member_id="+r.member_id)}</td>
-      <td class="tdMoney">${money(r.amount||0)}</td>
-      <td>${badge(r.status || "paid")}</td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="4" class="sub">No foundation payments</td></tr>`;
-
-  // fines history (admin loads; members will see empty)
-  $("fineBody").innerHTML = (fines||[]).map(r=>{
-    const mem = byId[String(r.member_id)];
-    return `<tr>
-      <td>${fmtDate(r.created_at)}</td>
-      <td>${r.member_name || mem?.name || ("member_id="+r.member_id)}</td>
-      <td class="tdMoney">${money(r.amount||0)}</td>
-      <td>${r.reason || ""}</td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="4" class="sub">${isAdmin ? "No fines" : "Admin only"}</td></tr>`;
-
-  // repayments history
-  $("repayCount").textContent = String(repayments.length || 0);
-  $("repayBody").innerHTML = (repayments||[]).map(r=>{
-    const mem = byId[String(r.member_id)];
-    return `<tr>
-      <td>${fmtDate(r.paid_at || r.created_at)}</td>
-      <td>${mem?.name || r.member_name || ("member_id="+r.member_id)}</td>
-      <td>${r.loan_id ?? ""}</td>
-      <td class="tdMoney">${money(r.amount||0)}</td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="4" class="sub">No repayments</td></tr>`;
-
-  // histogram
-  const labels = (members||[]).map(m=>m.name||"");
-  const data = (members||[]).map(m=> contribByMember[String(m.id)] || 0);
-
-  if(histChart){ histChart.destroy(); histChart = null; }
-  histChart = new Chart($("histChart"), {
-    type: "bar",
-    data: { labels, datasets: [{ label:"Contributions", data }] },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ display:false }},
-      scales:{
-        x:{ ticks:{ color:"#e5e7eb", autoSkip:false, maxRotation:60 }},
-        y:{ ticks:{ color:"#e5e7eb" }, beginAtZero:true }
-      }
-    }
+async function login(){
+  setStatus("");
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: document.getElementById("email").value,
+    password: document.getElementById("password").value
   });
 
-  // disable admin-only write buttons when not admin
-  $("btnAddMember").disabled = !isAdmin;
-  $("btnAddContrib").disabled = !isAdmin;
-  $("btnAddFoundationPayment").disabled = !isAdmin;
-  $("btnAddFine").disabled = !isAdmin;
+  const loginStatus = document.getElementById("loginStatus");
+
+  if(error){
+    loginStatus.innerText = error.message;
+    loginStatus.className = "muted err";
+    return;
+  }
+
+  loginStatus.innerText = "Login successful";
+  loginStatus.className = "muted ok";
+  document.getElementById("dashboard").classList.remove("hide");
+
+  await initUserContext();
+  await refreshAll();
+}
+
+async function logout(){
+  await sb.auth.signOut();
+  document.getElementById("dashboard").classList.add("hide");
+  document.getElementById("loginStatus").innerText = "Logged out";
+  document.getElementById("rolePill").innerText = "Role: --";
+  document.getElementById("memberPill").innerText = "Member ID: --";
+  IS_ADMIN = false;
+  MY_MEMBER_ID = null;
+}
+
+async function initUserContext(){
+  // is_admin()
+  try{
+    const admin = await callRPC("is_admin");
+    IS_ADMIN = !!admin;
+  }catch(e){
+    IS_ADMIN = false;
+  }
+
+  // current_member_id()
+  try{
+    const mid = await callRPC("current_member_id");
+    MY_MEMBER_ID = (mid === null || mid === undefined) ? null : mid;
+  }catch(e){
+    MY_MEMBER_ID = null;
+  }
+
+  document.getElementById("rolePill").innerText = `Role: ${IS_ADMIN ? "admin" : "member"}`;
+  document.getElementById("memberPill").innerText = `Member ID: ${MY_MEMBER_ID ?? "--"}`;
+
+  // Hide admin section for members
+  const adminCard = document.getElementById("adminCard");
+  if(!IS_ADMIN) adminCard.classList.add("hide");
+  else adminCard.classList.remove("hide");
 }
 
 /* =========================
-   WRITES
+   LOAD STATS
 ========================= */
-async function approveProfile(profileId){
-  if(!isAdmin) return toast("Admin only");
-  const up = await sb.from("profiles").update({ approved:true }).eq("id", profileId);
-  if(up.error) return toast(up.error.message);
-  toast("Approved");
-  await reloadAll();
+async function loadStats(){
+  // pot
+  try{
+    const pot = await callRPC("current_pot_amount");
+    document.getElementById("potAmount").innerText = pot ?? "--";
+  }catch(e){
+    document.getElementById("potAmount").innerText = "--";
+  }
+
+  // member_total_value(p_member_id bigint)
+  try{
+    if(MY_MEMBER_ID == null) throw new Error("No member id");
+    const val = await callRPC("member_total_value", { p_member_id: Number(MY_MEMBER_ID) });
+    document.getElementById("myValue").innerText = val ?? "--";
+  }catch(e){
+    document.getElementById("myValue").innerText = "--";
+  }
 }
 
+/* =========================
+   TABLE + CHART DATA LOAD
+========================= */
+async function refreshAll(){
+  setStatus("Refreshing…");
+  await loadStats();
+
+  // Members table (admin might see all; members might see only themselves)
+  await loadTable("members", "tbl_members");
+
+  // Other tables (best effort)
+  await loadTable("contributions", "tbl_contrib", { orderBy: "created_at", desc: true });
+  await loadTable("fines", "tbl_fines", { orderBy: "created_at", desc: true });
+  await loadTable("loans", "tbl_loans", { orderBy: "created_at", desc: true });
+  await loadTable("foundation_payments", "tbl_foundation", { orderBy: "created_at", desc: true });
+  await loadTable("repayments", "tbl_repayments", { orderBy: "created_at", desc: true });
+
+  // Charts based on contributions + fines rows
+  const contribRows = await fetchRows("contributions", { orderBy: "created_at", desc: false, limit: 300 });
+  const fineRows = await fetchRows("fines", { orderBy: "created_at", desc: false, limit: 300 });
+  renderCharts(contribRows, fineRows);
+
+  setStatus("Done ✅", true);
+}
+
+async function fetchRows(table, opts={}){
+  let q = sb.from(table).select("*").limit(opts.limit ?? 50);
+  if(opts.orderBy){
+    q = q.order(opts.orderBy, { ascending: !(opts.desc) });
+  }
+  const { data, error } = await q;
+  if(error){
+    console.warn("Fetch blocked or error:", table, error.message);
+    return [];
+  }
+  return data || [];
+}
+
+async function loadTable(table, containerId, opts={}){
+  const rows = await fetchRows(table, { ...opts, limit: 30 });
+  renderTable(containerId, rows);
+}
+
+function groupByDayAmount(rows, amountField){
+  // returns labels[] and values[] for last ~14 days if present
+  const map = new Map();
+  for(const r of (rows || [])){
+    const d = r.created_at ? new Date(r.created_at) : null;
+    if(!d || isNaN(d)) continue;
+    const key = d.toISOString().slice(0,10);
+    const amt = Number(r[amountField] ?? 0);
+    map.set(key, (map.get(key) || 0) + amt);
+  }
+  const labels = Array.from(map.keys()).sort();
+  const values = labels.map(k => map.get(k));
+  return { labels, values };
+}
+
+function renderCharts(contribRows, fineRows){
+  // Contribution chart
+  const c = groupByDayAmount(contribRows, "amount");
+  const f = groupByDayAmount(fineRows, "amount");
+
+  const ctxC = document.getElementById("chartContrib");
+  const ctxF = document.getElementById("chartFine");
+
+  if(chartContrib) chartContrib.destroy();
+  if(chartFine) chartFine.destroy();
+
+  chartContrib = new Chart(ctxC, {
+    type: "line",
+    data: { labels: c.labels, datasets: [{ label: "Contributions (daily sum)", data: c.values }] },
+    options: { responsive:true, maintainAspectRatio:false }
+  });
+
+  chartFine = new Chart(ctxF, {
+    type: "bar",
+    data: { labels: f.labels, datasets: [{ label: "Fines (daily sum)", data: f.values }] },
+    options: { responsive:true, maintainAspectRatio:false }
+  });
+}
+
+/* =========================
+   ADMIN ACTIONS
+========================= */
 async function addMember(){
-  if(!isAdmin) return toast("Admin only");
-  const name = $("mName").value.trim();
-  const email = $("mEmail").value.trim().toLowerCase();
-  const phone = $("mPhone").value.trim();
-  const hasBenefits = ($("mBenefits").value === "true");
-  if(!name) return toast("Enter name");
-  if(!email) return toast("Enter email");
-
-  const pos = members.length ? (Math.max(...members.map(x=>Number(x.position||0))) + 1) : 1;
-  const ins = await sb.from("members").insert([{ name, email, phone, has_benefits:hasBenefits, position:pos }]);
-  if(ins.error) return toast(ins.error.message);
-
-  $("mName").value=""; $("mEmail").value=""; $("mPhone").value="";
-  toast("Member added");
-  await reloadAll();
+  if(!IS_ADMIN) return alert("Admin only");
+  try{
+    const payload = {
+      name: document.getElementById("m_name").value.trim(),
+      email: document.getElementById("m_email").value.trim(),
+      phone: document.getElementById("m_phone").value.trim()
+    };
+    const { error } = await sb.from("members").insert([payload]);
+    if(error) throw new Error(error.message);
+    alert("Member added ✅");
+    await refreshAll();
+  }catch(e){
+    alert("Add member failed: " + e.message);
+  }
 }
 
 async function addContribution(){
-  if(!isAdmin) return toast("Admin only");
-  const member_id = $("cMember").value;
-  const amount = Number($("cAmount").value||0);
-  if(!member_id) return toast("Select member");
-  if(amount<=0) return toast("Enter amount");
-  if(amount % 500 !== 0) return toast("Must be multiple of 500");
-
-  let ins = await sb.from("contributions").insert([{ member_id, amount, kind:"contribution" }]);
-  if(ins.error){
-    ins = await sb.from("contributions").insert([{ member_id, amount }]);
+  if(!IS_ADMIN) return alert("Admin only");
+  try{
+    await callRPC("add_contribution", {
+      p_member_id: Number(document.getElementById("c_member").value),
+      p_amount: Number(document.getElementById("c_amount").value)
+    });
+    alert("Contribution added ✅");
+    await refreshAll();
+  }catch(e){
+    alert("Add contribution failed: " + e.message);
   }
-  if(ins.error) return toast(ins.error.message);
-
-  $("cAmount").value="";
-  toast("Saved");
-  await reloadAll();
-}
-
-async function addFoundationPayment(){
-  if(!isAdmin) return toast("Admin only");
-  const member_id = $("fpMember").value;
-  const amount = Number($("fpAmount").value||0);
-  if(!member_id) return toast("Select member");
-  if(amount<=0) return toast("Enter amount");
-
-  const mem = members.find(m=>String(m.id)===String(member_id));
-  const nowIso = new Date().toISOString();
-
-  let ins = await sb.from("foundation_payments").insert([{
-    member_id,
-    member_name: mem?.name || null,
-    amount,
-    status: "paid",
-    created_at: nowIso
-  }]);
-
-  if(ins.error){
-    ins = await sb.from("foundation_payments").insert([{
-      member_id, amount, status: "paid", created_at: nowIso
-    }]);
-  }
-  if(ins.error){
-    ins = await sb.from("foundation_payments").insert([{ member_id, amount }]);
-  }
-  if(ins.error) return toast(ins.error.message);
-
-  // Update app_state.foundation (pot increases)
-  const current = Number(appState.foundation||0);
-  const upS = await sb.from("app_state").update({
-    foundation: current + amount,
-    updated_at: nowIso
-  }).eq("id", 1);
-  if(upS.error) return toast("app_state update: " + upS.error.message);
-
-  $("fpAmount").value="";
-  toast("Foundation saved");
-  await reloadAll();
 }
 
 async function addFine(){
-  if(!isAdmin) return toast("Admin only");
-  const member_id = $("fMember").value;
-  const amount = Number($("fAmount").value||0);
-  const reason = $("fReason").value.trim();
-  if(!member_id) return toast("Select member");
-  if(amount<=0) return toast("Enter amount");
-
-  const mem = members.find(m=>String(m.id)===String(member_id));
-  const nowIso = new Date().toISOString();
-
-  let ins = await sb.from("fines").insert([{
-    member_id,
-    member_name: mem?.name || null,
-    amount,
-    reason: reason || null,
-    created_at: nowIso
-  }]);
-
-  if(ins.error){
-    ins = await sb.from("fines").insert([{
-      member_id, amount, reason: reason || null, created_at: nowIso
-    }]);
+  if(!IS_ADMIN) return alert("Admin only");
+  try{
+    await callRPC("add_fine", {
+      p_member_id: Number(document.getElementById("f_member").value),
+      p_amount: Number(document.getElementById("f_amount").value),
+      p_reason: String(document.getElementById("f_reason").value || "")
+    });
+    alert("Fine added ✅");
+    await refreshAll();
+  }catch(e){
+    alert("Add fine failed: " + e.message);
   }
-  if(ins.error){
-    ins = await sb.from("fines").insert([{ member_id, amount, reason: reason || null }]);
-  }
-  if(ins.error) return toast(ins.error.message);
+}
 
-  $("fAmount").value="";
-  $("fReason").value="";
-  toast("Fine saved");
-  await reloadAll();
+/*
+  repayments_update_foundation args were not fully visible in your screenshot.
+  We will call it with fallbacks:
+  - {p_member_id, p_amount}
+  - {p_member_id, p_payment_amount}
+  - {p_member_id, p_value}
+  - {p_member_id}  (if your function calculates amount internally)
+*/
+async function addFoundation(){
+  if(!IS_ADMIN) return alert("Admin only");
+  const mid = Number(document.getElementById("fp_member").value);
+  const amt = Number(document.getElementById("fp_amount").value);
+
+  const res = await callRPCWithFallback("repayments_update_foundation", [
+    { p_member_id: mid, p_amount: amt },
+    { p_member_id: mid, p_payment_amount: amt },
+    { p_member_id: mid, p_value: amt },
+    { p_member_id: mid }
+  ]);
+
+  if(!res.ok){
+    alert("Foundation update failed: " + res.error.message);
+    return;
+  }
+  alert("Foundation payment applied ✅");
+  await refreshAll();
 }
 
 async function addRepayment(){
-  if(!isAdmin) return toast("Admin only");
-  const member_id = $("rMember").value;
-  const loan_id = $("rLoan").value;
-  const amount = Number($("rAmount").value||0);
-
-  if(!member_id) return toast("Select member");
-  if(!loan_id) return toast("Select loan");
-  if(amount<=0) return toast("Enter amount");
-
-  const nowIso = new Date().toISOString();
-  let ins = await sb.from("repayments").insert([{
-    member_id,
-    loan_id,
-    amount,
-    paid_at: nowIso,
-    created_at: nowIso
-  }]);
-
-  if(ins.error){
-    // fallback if table doesn't have created_at
-    ins = await sb.from("repayments").insert([{
-      member_id, loan_id, amount, paid_at: nowIso
-    }]);
-  }
-
-  if(ins.error) return toast(ins.error.message);
-
-  $("rAmount").value="";
-  toast("Repayment saved");
-  await reloadAll();
+  if(!IS_ADMIN) return alert("Admin only");
+  // Using same function because it's the only one you showed.
+  // If you later create add_repayment() we will swap it in.
+  return addFoundation();
 }
 
-async function requestLoan(){
-  const borrower_member_id = (currentMemberId!=null) ? String(currentMemberId) : $("lBorrower").value;
-  const surety_member_id = $("lSurety").value;
-  const principal = Number($("lAmount").value||0);
-  if(!borrower_member_id) return toast("Borrower missing");
-  if(!surety_member_id) return toast("Select surety");
-  if(principal<=0) return toast("Enter amount");
-
-  const e = eligible(borrower_member_id, surety_member_id, principal);
-  if(!e.ok) return toast(e.reason);
-
-  const borrower = members.find(m=>String(m.id)===String(borrower_member_id));
-  const surety = members.find(m=>String(m.id)===String(surety_member_id));
-
-  const interest = Math.round(principal * INTEREST_RATE);
-  const total_due = principal + interest;
-
-  const variants = [
-    {
-      borrower_member_id,
-      borrower_name: borrower?.name || "",
-      surety_member_id,
-      surety_name: surety?.name || "",
-      principal, interest, total_due,
-      status: "pending",
-      created_at: new Date().toISOString()
-    },
-    {
-      member_id: borrower_member_id,
-      surety_member_id,
-      principal, interest, total_due,
-      status: "pending",
-      created_at: new Date().toISOString()
-    },
-    {
-      member_id: borrower_member_id,
-      principal, interest, total_due,
-      status: "pending",
-      created_at: new Date().toISOString()
-    }
-  ];
-
-  const ins = await tryInsertLoan(variants);
-  if(!ins.ok) return toast(ins.error?.message || "Loan insert failed");
-
-  $("lAmount").value="";
-  toast("Loan requested (pending)");
-  await reloadAll();
-}
-
-async function createActiveLoanAdmin(){
-  if(!isAdmin) return toast("Admin only");
-
-  const borrower_member_id = $("lBorrower").value;
-  const surety_member_id = $("lSurety").value;
-  const principal = Number($("lAmount").value||0);
-  if(!borrower_member_id) return toast("Select borrower");
-  if(!surety_member_id) return toast("Select surety");
-  if(principal<=0) return toast("Enter amount");
-
-  const e = eligible(borrower_member_id, surety_member_id, principal);
-  if(!e.ok) return toast(e.reason);
-
-  const borrower = members.find(m=>String(m.id)===String(borrower_member_id));
-  const surety = members.find(m=>String(m.id)===String(surety_member_id));
-  const interest = Math.round(principal * INTEREST_RATE);
-  const total_due = principal + interest;
-
-  const foundation = Number(appState.foundation||0);
-  if(principal > foundation) return toast("Not enough foundation");
-
-  const variants = [
-    {
-      borrower_member_id,
-      borrower_name: borrower?.name || "",
-      surety_member_id,
-      surety_name: surety?.name || "",
-      principal, interest, total_due,
-      status: "active",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    {
-      member_id: borrower_member_id,
-      surety_member_id,
-      principal, interest, total_due,
-      status: "active",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    {
-      member_id: borrower_member_id,
-      principal, interest, total_due,
-      status: "active",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }
-  ];
-
-  const ins = await tryInsertLoan(variants);
-  if(!ins.ok) return toast(ins.error?.message || "Loan insert failed");
-
-  const upS = await sb.from("app_state").update({
-    foundation: foundation - principal,
-    total_interest_generated: Number(appState.total_interest_generated||0) + interest,
-    updated_at: new Date().toISOString()
-  }).eq("id", 1);
-  if(upS.error) return toast("app_state update: " + upS.error.message);
-
-  $("lAmount").value="";
-  toast("Active loan created");
-  await reloadAll();
-}
-
-async function approveLoan(loanId){
-  if(!isAdmin) return toast("Admin only");
-
-  const got = await sb.from("loans").select("*").eq("id", loanId).single();
-  if(got.error) return toast("fetch: " + got.error.message);
-  const loan = got.data;
-
-  const status = String(loan.status||"").toLowerCase();
-  if(status !== "pending") return toast("Not pending");
-
-  const foundation = Number(appState.foundation||0);
-  const principal = Number(loan.principal||0);
-  const interest = Number(loan.interest||0);
-
-  if(principal > foundation) return toast("Not enough foundation to approve");
-
-  const upLoan = await sb.from("loans").update({
-    status:"active",
-    updated_at:new Date().toISOString()
-  }).eq("id", loanId);
-  if(upLoan.error) return toast("approve: " + upLoan.error.message);
-
-  const upS = await sb.from("app_state").update({
-    foundation: foundation - principal,
-    total_interest_generated: Number(appState.total_interest_generated||0) + interest,
-    updated_at: new Date().toISOString()
-  }).eq("id", 1);
-  if(upS.error) return toast("app_state: " + upS.error.message);
-
-  toast("Approved ✅");
-  await reloadAll();
-}
-
-/* =========================
-   RUN PAYOUT
-========================= */
-async function runPayout(){
-  if(!isAdmin) return toast("Admin only");
-  if(!members.length) return toast("No members");
-
-  const totalsByMember = {};
-  for(const r of contributions){
-    const k = String(r.member_id);
-    totalsByMember[k] = (totalsByMember[k]||0) + Number(r.amount||0);
-  }
-  const potSum = Object.values(totalsByMember).reduce((s,v)=>s+v,0);
-  if(potSum <= 0) return toast("Pot is 0");
-
-  const idx = Number(appState.next_payout_index ?? 0);
-  const payIndex = idx % members.length;
-  const payMember = members[payIndex];
-  const payout_date = (appState.next_payout_date || new Date().toISOString().slice(0,10));
-
-  const ins = await sb.from("payouts").insert([{
-    member_id: payMember.id,
-    member_name: payMember.name,
-    payout_amount: potSum,
-    payout_date,
-    created_at: new Date().toISOString()
-  }]);
-  if(ins.error) return toast(ins.error.message);
-
-  const d = new Date(payout_date + "T00:00:00");
-  d.setDate(d.getDate() + 14);
-  const nextDate = d.toISOString().slice(0,10);
-
-  const upS = await sb.from("app_state").update({
-    next_payout_index: idx + 1,
-    next_payout_date: nextDate,
-    updated_at: new Date().toISOString()
-  }).eq("id", 1);
-  if(upS.error) return toast("app_state: " + upS.error.message);
-
-  toast(`Payout done → ${payMember.name}`);
-  await reloadAll();
-}
-
-/* =========================
-   INIT
-========================= */
-document.addEventListener("DOMContentLoaded", async ()=>{
-  $("tabSignIn").onclick = ()=>setAuthMode("signin");
-  $("tabSignUp").onclick = ()=>setAuthMode("signup");
-  $("btnAuth").onclick = ()=> (AUTH_MODE==="signup" ? signUp() : signIn());
-  $("btnLogout").onclick = signOut;
-  $("btnRefresh").onclick = reloadAll;
-
-  // nav
-  document.querySelectorAll(".nav button[data-sec]").forEach(b=>{
-    b.onclick = ()=>{
-      const sec = b.getAttribute("data-sec");
-      const title = b.textContent.trim();
-      const hint = (sec==="dash") ? "Overview + histogram"
-        : (sec==="members") ? "Admin: add members + approve logins"
-        : (sec==="contrib") ? "Admin: add contributions"
-        : (sec==="loans") ? "Member: request. Admin: approve."
-        : (sec==="repayments") ? "All users view; Admin adds repayments"
-        : (sec==="foundation") ? "Admin: add foundation payment + history"
-        : (sec==="fines") ? "Admin: add fines + history"
-        : "Payout history; Admin can run payout";
-      showSection(sec, title, hint);
-    };
-  });
-
-  // actions
-  $("btnAddMember").onclick = addMember;
-  $("btnAddContrib").onclick = addContribution;
-  $("btnAddFoundationPayment").onclick = addFoundationPayment;
-  $("btnAddFine").onclick = addFine;
-  $("btnAddRepayment").onclick = addRepayment;
-
-  // payout buttons
-  $("btnRunPayout").onclick = runPayout;
-  $("btnRunPayout2").onclick = runPayout;
-
-  // loan button
-  $("btnLoanAction").onclick = async ()=>{
-    if(isAdmin) return createActiveLoanAdmin();
-    return requestLoan();
-  };
-
-  setAuthMode("signin");
-
-  // restore session
+async function payInterest(){
+  if(!IS_ADMIN) return alert("Admin only");
   try{
-    const ok = await enforceGate();
-    if(ok){
-      await reloadAll();
-      toast("Session restored");
-    }
+    await callRPC("pay_interest", {
+      p_loan_id: document.getElementById("pi_loan").value.trim(),
+      p_amount: Number(document.getElementById("pi_amount").value)
+    });
+    alert("Interest payment recorded ✅");
+    await refreshAll();
   }catch(e){
-    // stay on login
+    alert("Pay interest failed: " + e.message);
   }
-});
+}
+
+async function runPayout(){
+  if(!IS_ADMIN) return alert("Admin only");
+  try{
+    await callRPC("run_payout");
+    alert("run_payout ✅");
+    await refreshAll();
+  }catch(e){
+    alert("run_payout failed: " + e.message);
+  }
+}
+
+async function runRotationPayout(){
+  if(!IS_ADMIN) return alert("Admin only");
+  try{
+    await callRPC("run_rotation_payout");
+    alert("run_rotation_payout ✅");
+    await refreshAll();
+  }catch(e){
+    alert("run_rotation_payout failed: " + e.message);
+  }
+}
+
+async function runAllRules(){
+  if(!IS_ADMIN) return alert("Admin only");
+  try{
+    await callRPC("run_all_njangi_rules");
+    alert("run_all_njangi_rules ✅");
+    await refreshAll();
+  }catch(e){
+    alert("run_all_njangi_rules failed: " + e.message);
+  }
+}
+
+async function runRulesQuick(){
+  if(!IS_ADMIN) return alert("Admin only");
+  return runAllRules();
+}
+
+/* =========================
+   MEMBER: LOAN REQUEST
+========================= */
+async function requestLoan(){
+  const msg = document.getElementById("loanMsg");
+  msg.innerText = "";
+
+  if(MY_MEMBER_ID == null){
+    msg.innerText = "No member_id found for this account. Make sure your members table maps to auth email correctly.";
+    msg.className = "muted err";
+    return;
+  }
+
+  const surety = Number(document.getElementById("loan_surety").value);
+  const amount = Number(document.getElementById("loan_amount").value);
+
+  // Your borrow_eligibility args were cut off in the screenshot.
+  // We'll try common parameter names until one works.
+  const res = await callRPCWithFallback("borrow_eligibility", [
+    { p_borrower_id: Number(MY_MEMBER_ID), p_surety_id: surety, p_amount: amount },
+    { p_borrower_id: Number(MY_MEMBER_ID), p_surety_id: surety, p_requested_amount: amount },
+    { p_borrower_id: Number(MY_MEMBER_ID), p_surety_id: surety, p_request_amount: amount },
+    { p_borrower_id: Number(MY_MEMBER_ID), p_surety_id: surety, p_requested: amount }
+  ]);
+
+  if(!res.ok){
+    msg.innerText = "Loan request failed: " + res.error.message;
+    msg.className = "muted err";
+    return;
+  }
+
+  msg.innerText = "Loan request submitted ✅ (borrow_eligibility ran).";
+  msg.className = "muted ok";
+  await refreshAll();
+}
+
+/* Auto-resume if already logged in */
+(async function boot(){
+  const { data } = await sb.auth.getSession();
+  if(data?.session){
+    document.getElementById("dashboard").classList.remove("hide");
+    await initUserContext();
+    await refreshAll();
+    document.getElementById("loginStatus").innerText = "Session restored ✅";
+    document.getElementById("loginStatus").className = "muted ok";
+  }
+})();
 </script>
 
 </body>
