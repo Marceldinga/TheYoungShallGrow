@@ -2,6 +2,15 @@ import pandas as pd
 import streamlit as st
 from supabase import create_client
 
+# ============================================================
+# The Young Shall Grow – Dashboard (Single Script)
+# - Member login (Supabase Auth)
+# - Member sees ONLY their data (RLS) + extra safety filters
+# - Admin can switch "Member ID" to view another member
+# - IMPORTANT FIX: Loans fetch tries multiple possible member columns
+#   (member_id / borrower_id / user_id) and falls back gracefully
+# ============================================================
+
 # ----------------------------
 # SETTINGS
 # ----------------------------
@@ -15,13 +24,12 @@ ADMIN_EMAILS = [e.strip().lower() for e in str(st.secrets.get("ADMIN_EMAILS", ""
 supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 # ----------------------------
-# PRO UI THEME (GOOD COLORS)
+# PRO UI THEME
 # ----------------------------
 st.markdown("""
 <style>
 :root{
   --bg:#0b1220;
-  --card:#0f172a;
   --stroke:rgba(148,163,184,.18);
   --text:#e5e7eb;
   --muted:rgba(229,231,235,.65);
@@ -74,14 +82,18 @@ def logout():
     st.rerun()
 
 def attach_jwt(access_token: str):
-    # Ensure all queries run as the logged-in user (RLS)
+    # Make all PostgREST queries use the logged-in user's JWT (RLS applies)
     supabase.postgrest.auth(access_token)
 
 # ----------------------------
 # LOGIN
 # ----------------------------
 if not is_logged_in():
-    st.markdown("<div class='hdr'><h1 style='margin:0'>🌱 Login</h1><div class='small-muted'>Sign in with your Supabase Auth email/password</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='hdr'><h1 style='margin:0'>🌱 Login</h1>"
+        "<div class='small-muted'>Sign in with your Supabase Auth email/password</div></div>",
+        unsafe_allow_html=True
+    )
     st.write("")
 
     with st.form("login_form", clear_on_submit=False):
@@ -108,7 +120,7 @@ user_email = st.session_state.get("user_email", "").lower()
 is_admin = user_email in ADMIN_EMAILS
 
 # ----------------------------
-# GET MY MEMBER ROW (RLS limits to own row)
+# GET MY MEMBER ROW (RLS should return only my row)
 # ----------------------------
 try:
     rows = supabase.table("members").select("id,name,email,phone,has_benefits,position").limit(1).execute().data
@@ -123,7 +135,7 @@ if not my_member:
 my_member_id = int(my_member["id"])
 
 # ----------------------------
-# FILTER PANEL (includes MEMBER ID FILTER + RECORD ID FILTER)
+# HEADER
 # ----------------------------
 st.markdown(
     f"""
@@ -147,8 +159,10 @@ st.markdown(
 st.write("")
 st.button("Logout", on_click=logout)
 
+# ----------------------------
+# FILTER PANEL
+# ----------------------------
 st.subheader("Filters")
-
 f1, f2, f3, f4, f5 = st.columns([2, 3, 2, 2, 2])
 
 range_opt = f1.selectbox("Time range", ["All time", "Last 30 days", "Last 90 days", "This year"], index=0)
@@ -157,9 +171,9 @@ member_filter = f3.text_input("Member ID", placeholder="leave blank = me")
 record_id = f4.text_input("Record ID", placeholder="e.g. 58")
 show_only_unpaid = f5.checkbox("Only unpaid fines", value=False)
 
-# Determine which member_id to use for queries:
-# - normal members: always their own id
-# - admin: can type another member id
+# Which member_id to view:
+# - Members: always their own member_id
+# - Admin: can type another member_id
 effective_member_id = my_member_id
 if is_admin and member_filter.strip():
     try:
@@ -174,6 +188,7 @@ def apply_date_filter(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
     if df.empty or date_col not in df.columns:
         return df
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce", utc=True)
+
     if range_opt == "Last 30 days":
         return df[df[date_col] >= (pd.Timestamp.utcnow() - pd.Timedelta(days=30))]
     if range_opt == "Last 90 days":
@@ -205,10 +220,10 @@ def apply_record_id_filter(df: pd.DataFrame) -> pd.DataFrame:
     return df[pd.to_numeric(df["id"], errors="coerce") == rid]
 
 # ----------------------------
-# FETCH (ALWAYS FILTER BY member_id)
+# FETCH HELPERS (by member_id)
 # ----------------------------
-def fetch_df(table: str, cols="*", order_col=None, date_col=None) -> pd.DataFrame:
-    q = supabase.table(table).select(cols).eq("member_id", effective_member_id)
+def fetch_df(table: str, cols="*", member_col="member_id", order_col=None, date_col=None) -> pd.DataFrame:
+    q = supabase.table(table).select(cols).eq(member_col, effective_member_id)
     if order_col:
         q = q.order(order_col, desc=True)
     data = q.execute().data
@@ -217,35 +232,76 @@ def fetch_df(table: str, cols="*", order_col=None, date_col=None) -> pd.DataFram
         df = apply_date_filter(df, date_col)
     return df
 
+def fetch_loans_best_effort() -> pd.DataFrame:
+    """
+    Fix for your issue:
+    Some projects store loans with a different column name (member_id vs borrower_id vs user_id).
+    This tries multiple options so loans will show when the member actually has a loan.
+    """
+    # Try common schemas in order:
+    candidates = [
+        ("member_id", "created_at"),
+        ("borrower_id", "created_at"),
+        ("user_id", "created_at"),  # sometimes uuid (may not match member_id; still try)
+    ]
+
+    # Try selecting everything first (safe; RLS still applies)
+    for member_col, date_col in candidates:
+        try:
+            df = fetch_df("loans", "*", member_col=member_col, order_col=date_col, date_col=date_col)
+            if not df.empty:
+                df["_matched_on"] = member_col
+                return df
+        except Exception:
+            continue
+
+    # If still empty: maybe loans date column is not created_at
+    # Try without ordering/date filter
+    for member_col, _ in candidates:
+        try:
+            q = supabase.table("loans").select("*").eq(member_col, effective_member_id)
+            data = q.execute().data
+            df = pd.DataFrame(data or [])
+            if not df.empty:
+                df["_matched_on"] = member_col
+                return df
+        except Exception:
+            continue
+
+    return pd.DataFrame()
+
 # ----------------------------
 # LOAD DATA + APPLY FILTERS
 # ----------------------------
-contrib_df = fetch_df("contributions", "id,member_id,amount,kind,created_at,updated_at", order_col="created_at", date_col="created_at")
+# Contributions table (your schema has created_at)
+contrib_df = fetch_df("contributions", "id,member_id,amount,kind,created_at,updated_at", member_col="member_id",
+                      order_col="created_at", date_col="created_at")
 contrib_df = apply_search(contrib_df, ["kind"])
 contrib_df = apply_record_id_filter(contrib_df)
 
+# Foundation payments (your schema has date_paid)
 found_df = fetch_df(
     "foundation_payments",
     "id,member_id,amount_paid,amount_pending,status,date_paid,notes,updated_at,converted_to_loan,converted_loan_id",
+    member_col="member_id",
     order_col="date_paid",
-    date_col="date_paid"
+    date_col="date_paid",
 )
 found_df = apply_search(found_df, ["status", "notes"])
 found_df = apply_record_id_filter(found_df)
 
-fines_df = fetch_df("fines", "id,member_id,amount,reason,status,paid_at,created_at,updated_at", order_col="created_at", date_col="created_at")
+# Fines (your schema has created_at)
+fines_df = fetch_df("fines", "id,member_id,amount,reason,status,paid_at,created_at,updated_at", member_col="member_id",
+                    order_col="created_at", date_col="created_at")
 fines_df = apply_search(fines_df, ["reason", "status"])
 if show_only_unpaid and "status" in fines_df.columns:
     fines_df = fines_df[fines_df["status"].astype(str).str.lower() == "unpaid"]
 fines_df = apply_record_id_filter(fines_df)
 
-loans_df = pd.DataFrame()
-try:
-    loans_df = fetch_df("loans", "*", order_col="created_at", date_col="created_at")
-    loans_df = apply_search(loans_df, ["status", "notes", "type"])
-    loans_df = apply_record_id_filter(loans_df)
-except Exception:
-    loans_df = pd.DataFrame()
+# Loans (BEST EFFORT FIX)
+loans_df = fetch_loans_best_effort()
+loans_df = apply_search(loans_df, ["status", "notes", "type", "_matched_on"])
+loans_df = apply_record_id_filter(loans_df)
 
 # ----------------------------
 # KPIs
@@ -267,18 +323,28 @@ if not fines_df.empty and "status" in fines_df.columns and "amount" in fines_df.
         ).fillna(0).sum()
     )
 
+# Loan principal: try common names
+loan_principal = 0.0
+for possible in ["principal", "amount", "loan_amount"]:
+    if not loans_df.empty and possible in loans_df.columns:
+        loan_principal = safe_sum(loans_df, possible)
+        break
+
 active_loans = 0
 if not loans_df.empty and "status" in loans_df.columns:
     active_loans = int((loans_df["status"].astype(str).str.lower().isin(["active", "open", "ongoing"])).sum())
+elif not loans_df.empty:
+    active_loans = len(loans_df)
 
 st.write("")
 st.markdown(f"<div class='small-muted'>Currently viewing: <b>member_id = {effective_member_id}</b></div>", unsafe_allow_html=True)
 
-k1, k2, k3, k4 = st.columns(4)
+k1, k2, k3, k4, k5 = st.columns(5)
 k1.markdown(f"<div class='kpi'><div class='label'>Total Contributions</div><div class='value'>{total_contrib:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
 k2.markdown(f"<div class='kpi'><div class='label'>Total Foundation Paid</div><div class='value'>{total_found_paid:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
 k3.markdown(f"<div class='kpi'><div class='label'>Unpaid Fines</div><div class='value'>{unpaid_fines_amt:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
 k4.markdown(f"<div class='kpi'><div class='label'>Active Loans</div><div class='value'>{active_loans}</div><div class='accent'></div></div>", unsafe_allow_html=True)
+k5.markdown(f"<div class='kpi'><div class='label'>Loan Total (best)</div><div class='value'>{loan_principal:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
 
 st.markdown("<hr/>", unsafe_allow_html=True)
 
@@ -302,8 +368,15 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("Loans")
     if loans_df.empty:
-        st.info("Loans table not found or no loans available for this member.")
+        st.warning(
+            "No loans returned for this member. This usually means ONE of these is true:\n"
+            "1) loans table uses a different member column name not tried here, OR\n"
+            "2) RLS is blocking admin from reading loans for other members.\n\n"
+            "If you want, I can give you the exact RLS SQL for admin read (safe)."
+        )
     else:
+        if "_matched_on" in loans_df.columns:
+            st.caption(f"Loans matched using column: {loans_df['_matched_on'].iloc[0]}")
         st.dataframe(loans_df, use_container_width=True)
 
 with tabs[4]:
@@ -314,6 +387,9 @@ with tabs[4]:
 # ADMIN NOTE
 # ----------------------------
 if is_admin:
-    st.info("Admin detected. You can type a Member ID in the filter to view that member’s records (RLS must allow admin access to all members).")
+    st.info(
+        "Admin detected. You can type a Member ID to view that member’s records. "
+        "If loans still don’t show for some members, it’s almost always an RLS policy or a different loans schema."
+    )
 else:
     st.caption("You can only view your own data.")
