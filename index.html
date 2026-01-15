@@ -459,22 +459,24 @@
   // OVERVIEW (read-only)
   // =============================
   async function loadOverview(){
-    try{
-      // Your functions from screenshots
-      const pot = await callRPC("current_pot_amount");
-      const myVal = await callRPC("member_total_value");
-      const myId = await callRPC("current_member_id");
+  try{
+    const pot = await callRPC("current_pot_amount");
+    const myId = await callRPC("current_member_id");
 
-      potAmount.textContent = (pot ?? "--");
-      myValue.textContent = (myVal ?? "--");
-      myMemberId.textContent = (myId ?? "--");
+    const myVal = await callRPC("member_total_value", {
+      p_member_id: myId
+    });
 
-      // Pre-fill borrower id to reduce errors
-      if(myId && !loan_borrower.value) loan_borrower.value = myId;
-    }catch(e){
-      // keep UI alive
-    }
+    potAmount.textContent = (pot ?? "--");
+    myValue.textContent = (myVal ?? "--");
+    myMemberId.textContent = (myId ?? "--");
+
+    if(myId && !loan_borrower.value) loan_borrower.value = myId;
+  }catch(e){
+    // keep UI alive
   }
+}
+
 
   // =============================
   // ADMIN INSERTS
