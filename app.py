@@ -22,20 +22,15 @@ st.markdown("""
 :root{
   --bg:#0b1220;
   --card:#0f172a;
-  --card2:#111c33;
   --stroke:rgba(148,163,184,.18);
   --text:#e5e7eb;
   --muted:rgba(229,231,235,.65);
-  --brand:#22c55e;         /* green */
-  --brand2:#14b8a6;        /* teal */
-  --warn:#f59e0b;
-  --danger:#ef4444;
+  --brand:#22c55e;
+  --brand2:#14b8a6;
   --shadow: 0 18px 50px rgba(0,0,0,.35);
 }
-
 .stApp { background: linear-gradient(180deg, var(--bg), #070b14 70%); color: var(--text); }
 .block-container{max-width:1180px;padding-top:1.2rem;padding-bottom:2rem;}
-
 .hdr{
   border:1px solid var(--stroke);
   background: linear-gradient(135deg, rgba(34,197,94,.10), rgba(20,184,166,.08));
@@ -53,7 +48,6 @@ st.markdown("""
   color: var(--text);
 }
 .badge span{ color: var(--muted); }
-
 .kpi{
   border:1px solid var(--stroke);
   background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
@@ -64,7 +58,6 @@ st.markdown("""
 .kpi .label{ color: var(--muted); font-size: 13px; }
 .kpi .value{ font-size: 28px; font-weight: 800; margin-top: 6px; }
 .kpi .accent{ width:100%; height:4px; border-radius:999px; background: linear-gradient(90deg, var(--brand), var(--brand2)); margin-top: 10px; }
-
 .small-muted{ color: var(--muted); font-size: 13px; }
 hr{ border: none; border-top: 1px solid var(--stroke); margin: 14px 0; }
 </style>
@@ -127,7 +120,7 @@ if not my_member:
     st.warning("No member profile found. Ensure public.members.email matches the Auth email exactly.")
     st.stop()
 
-member_id = my_member["id"]  # <- we will use this in ALL queries
+member_id = my_member["id"]  # we will use this in ALL queries
 
 # ----------------------------
 # HEADER
@@ -152,21 +145,21 @@ st.write("")
 st.button("Logout", on_click=logout)
 
 # ----------------------------
-# FILTERS (GOOD FILTERS)
+# FILTERS (UPDATED: includes Record ID)
 # ----------------------------
 st.subheader("My Overview")
 
-f1, f2, f3 = st.columns([2, 2, 2])
+f1, f2, f3, f4 = st.columns([2, 3, 2, 2])
 
 range_opt = f1.selectbox("Time range", ["All time", "Last 30 days", "Last 90 days", "This year"], index=0)
 search_text = f2.text_input("Quick search (reason/kind/status)", placeholder="e.g. unpaid, late, foundation...")
-show_only_unpaid = f3.checkbox("Only unpaid fines", value=False)
+record_id = f3.text_input("Record ID", placeholder="e.g. 58")
+show_only_unpaid = f4.checkbox("Only unpaid fines", value=False)
 
 def apply_date_filter(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
     if df.empty or date_col not in df.columns:
         return df
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce", utc=True)
-
     if range_opt == "Last 30 days":
         return df[df[date_col] >= (pd.Timestamp.utcnow() - pd.Timedelta(days=30))]
     if range_opt == "Last 90 days":
@@ -186,6 +179,18 @@ def apply_search(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
             mask = mask | df[c].astype(str).str.lower().str.contains(s, na=False)
     return df[mask]
 
+def apply_id_filter(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or not record_id.strip():
+        return df
+    try:
+        rid = int(record_id.strip())
+    except Exception:
+        return df
+    if "id" not in df.columns:
+        return df
+    # ensure numeric compare
+    return df[pd.to_numeric(df["id"], errors="coerce") == rid]
+
 # ----------------------------
 # FETCH HELPERS (ALWAYS USE member_id)
 # ----------------------------
@@ -199,11 +204,13 @@ def fetch_df(table: str, cols="*", order_col=None, date_col=None) -> pd.DataFram
         df = apply_date_filter(df, date_col)
     return df
 
-# Contributions columns: id, member_id (int), amount, kind, created_at, updated_at
+# ----------------------------
+# LOAD DATA + APPLY FILTERS
+# ----------------------------
 contrib_df = fetch_df("contributions", "id,member_id,amount,kind,created_at,updated_at", order_col="created_at", date_col="created_at")
 contrib_df = apply_search(contrib_df, ["kind"])
+contrib_df = apply_id_filter(contrib_df)
 
-# Foundation columns: amount_paid, amount_pending, status, date_paid, notes...
 found_df = fetch_df(
     "foundation_payments",
     "id,member_id,amount_paid,amount_pending,status,date_paid,notes,updated_at,converted_to_loan,converted_loan_id",
@@ -211,18 +218,19 @@ found_df = fetch_df(
     date_col="date_paid"
 )
 found_df = apply_search(found_df, ["status", "notes"])
+found_df = apply_id_filter(found_df)
 
-# Fines columns: amount, reason, status, paid_at, created_at...
 fines_df = fetch_df("fines", "id,member_id,amount,reason,status,paid_at,created_at,updated_at", order_col="created_at", date_col="created_at")
 fines_df = apply_search(fines_df, ["reason", "status"])
 if show_only_unpaid and "status" in fines_df.columns:
     fines_df = fines_df[fines_df["status"].astype(str).str.lower() == "unpaid"]
+fines_df = apply_id_filter(fines_df)
 
-# Loans (optional)
 loans_df = pd.DataFrame()
 try:
     loans_df = fetch_df("loans", "*", order_col="created_at", date_col="created_at")
     loans_df = apply_search(loans_df, ["status", "notes", "type"])
+    loans_df = apply_id_filter(loans_df)
 except Exception:
     loans_df = pd.DataFrame()
 
@@ -236,6 +244,7 @@ def safe_sum(df, col):
 
 total_contrib = safe_sum(contrib_df, "amount")
 total_found_paid = safe_sum(found_df, "amount_paid")
+
 unpaid_fines_amt = 0.0
 if not fines_df.empty and "status" in fines_df.columns and "amount" in fines_df.columns:
     unpaid_fines_amt = float(
@@ -258,7 +267,7 @@ k4.markdown(f"<div class='kpi'><div class='label'>Active Loans</div><div class='
 st.markdown("<hr/>", unsafe_allow_html=True)
 
 # ----------------------------
-# TABS
+# TABLES
 # ----------------------------
 tabs = st.tabs(["Contributions", "Foundation Payments", "Fines", "Loans", "My Profile"])
 
