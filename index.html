@@ -473,8 +473,8 @@
       try{
         if(myId !== null && myId !== undefined){
           myVal = await callRPC("member_total_value", { p_member_id: Number(myId) });
-          const foundationTotal = await callRPC("total_foundation_payment");
-totalFoundationPayment.textContent = fmtMoney(foundationTotal);
+          const totalF = await callRPC("current_cycle_foundation");
+totalFoundationPayment.textContent = fmtMoney(totalF);
 
         }
       }catch(e){}
