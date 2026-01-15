@@ -136,7 +136,7 @@
       <div class="brandMini"><span class="dot"></span> TheYoungShallGrow</div>
       <span class="pill">Secure Login</span>
     </div>
-    <div class="sub">Admin can add data. Members can view + request loans.</div>
+    <div class="sub">Admin can add data. Members can view dashboard + request loans.</div>
 
     <div class="authTabs">
       <button id="tabSignIn" class="btn primary" type="button">Sign in</button>
@@ -174,9 +174,10 @@
       <button type="button" data-sec="members" data-admin="1">Members</button>
       <button type="button" data-sec="contrib" data-admin="1">Contributions</button>
       <button type="button" data-sec="loans">Loans</button>
+      <button type="button" data-sec="repayments">Repayments</button>
       <button type="button" data-sec="foundation" data-admin="1">Foundation</button>
       <button type="button" data-sec="fines" data-admin="1">Fines</button>
-      <button type="button" data-sec="payouts" data-admin="1">Payouts</button>
+      <button type="button" data-sec="payouts">Payouts</button>
       <button class="btn ghost" style="margin-top:6px" type="button" id="btnRefresh">Refresh</button>
     </div>
 
@@ -231,7 +232,7 @@
         <div style="font-size:18px;font-weight:900" id="pageTitle">Dashboard</div>
         <div class="sub" id="pageHint">Overview + histogram</div>
       </div>
-      <span class="pill">Total Interest: <b id="kInterestMini">$0</b></span>
+      <span class="pill" id="interestPill">Total Interest: <b id="kInterestMini">$0</b></span>
     </div>
 
     <!-- DASH -->
@@ -320,7 +321,7 @@
     <section id="contrib" class="section">
       <div class="grid2">
         <div class="card">
-          <div style="font-weight:900">Add Contribution</div>
+          <div style="font-weight:900">Add Contribution (Admin)</div>
           <div style="display:grid;gap:10px;margin-top:10px;">
             <select id="cMember"></select>
             <input id="cAmount" type="number" placeholder="Amount (multiple of 500)" />
@@ -356,7 +357,7 @@
           </div>
 
           <div class="sub" style="margin-top:10px">
-            Borrow rule (NOT additive): borrower qualifies alone OR surety qualifies alone.
+            Borrow rule: borrower qualifies alone OR surety qualifies alone (NOT additive).
           </div>
         </div>
 
@@ -375,6 +376,54 @@
                 </tr>
               </thead>
               <tbody id="loanBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REPAYMENTS (Everyone sees; only Admin can add) -->
+    <section id="repayments" class="section">
+      <div class="grid2">
+        <div class="card">
+          <div style="font-weight:900">Add Repayment</div>
+          <div class="sub">Admin only. Writes to <b>public.repayments</b>.</div>
+
+          <div style="display:grid;gap:10px;margin-top:10px;">
+            <label class="sub">Member</label>
+            <select id="rMember"></select>
+
+            <label class="sub">Loan</label>
+            <select id="rLoan"></select>
+
+            <label class="sub">Amount Paid</label>
+            <input id="rAmount" type="number" placeholder="e.g. 100" />
+
+            <button class="btn primary" type="button" id="btnAddRepayment">Save Repayment</button>
+          </div>
+
+          <div class="sub" style="margin-top:10px;">
+            Members can view repayments but cannot add.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <div style="font-weight:900">Repayment History</div>
+            <span class="pill" id="repayCount">0</span>
+          </div>
+
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Member</th>
+                  <th>Loan ID</th>
+                  <th class="tdMoney">Amount</th>
+                </tr>
+              </thead>
+              <tbody id="repayBody"></tbody>
             </table>
           </div>
         </div>
@@ -432,12 +481,12 @@
       </div>
     </section>
 
-    <!-- PAYOUTS (Admin) -->
+    <!-- PAYOUTS (Everyone sees; Admin can run) -->
     <section id="payouts" class="section">
       <div class="grid2">
         <div class="card">
-          <div style="font-weight:900">Run Payout (Admin)</div>
-          <div class="sub">Also updates member payout_total + app_state next index/date.</div>
+          <div style="font-weight:900">Run Payout</div>
+          <div class="sub">Admin only. Records to <b>payouts</b> and advances rotation.</div>
           <button class="btn primary" type="button" id="btnRunPayout2" style="width:100%;margin-top:10px;">
             Run Payout Now
           </button>
@@ -486,12 +535,13 @@ let currentMemberId = null;
 let appState = null;
 let members = [];
 let contributions = [];
-let foundationPayments = [];   // used for eligibility + member totals
+let foundationPayments = [];   // eligibility totals
+let foundationHistory = [];    // show history
 let loans = [];
 let payouts = [];
 let profiles = [];
-let fines = [];               // ✅ ADDED
-let foundationHistory = [];   // ✅ ADDED (raw rows for history table)
+let fines = [];
+let repayments = [];
 let histChart = null;
 
 /* =========================
@@ -522,7 +572,7 @@ function badge(status){
   const s = String(status||"").toLowerCase();
   if(s==="pending") return `<span class="badge b-pending">Pending</span>`;
   if(s==="active") return `<span class="badge b-active">Active</span>`;
-  if(s==="paid"||s==="paid_off"||s==="cleared") return `<span class="badge b-paid">Paid</span>`;
+  if(s==="paid"||s==="paid_off"||s==="cleared"||s==="converted") return `<span class="badge b-paid">${status||"Paid"}</span>`;
   return `<span class="badge b-unknown">${status||"—"}</span>`;
 }
 function fmtDate(x){
@@ -531,7 +581,8 @@ function fmtDate(x){
 }
 function showSection(sec, title, hint){
   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
-  $(sec).classList.add("active");
+  const el = $(sec);
+  if(el) el.classList.add("active");
   $("pageTitle").textContent = title;
   $("pageHint").textContent = hint;
 
@@ -585,18 +636,21 @@ async function enforceGate(){
   $("role").textContent = pr.data.role || "member";
   $("today").textContent = new Date().toLocaleDateString();
 
-  // admin-only nav
+  // admin-only nav items
   document.querySelectorAll("[data-admin='1']").forEach(b=>{
     b.style.display = isAdmin ? "block" : "none";
   });
 
   $("rotRolePill").textContent = isAdmin ? "Admin" : "Member";
 
+  // payout buttons admin-only
   $("btnRunPayout").disabled = !isAdmin;
   $("btnRunPayout2").disabled = !isAdmin;
 
-  $("kInterestMini").parentElement.style.display = isAdmin ? "inline-flex" : "none";
+  // interest pill: show for all (but you can hide if you want)
+  $("interestPill").style.display = "inline-flex";
 
+  // loans form changes
   if(isAdmin){
     $("loanFormTitle").textContent = "Approve / Manage Loans (Admin)";
     $("loanFormHint").textContent = "Members request loans (pending). Admin approves → active.";
@@ -606,6 +660,9 @@ async function enforceGate(){
     $("loanFormHint").textContent = "Your request will be pending until admin approves.";
     $("btnLoanAction").textContent = "Request Loan";
   }
+
+  // repayments add button admin-only
+  $("btnAddRepayment").disabled = !isAdmin;
 
   return true;
 }
@@ -671,15 +728,13 @@ async function loadFoundationPayments(){
   let fp = await sb.from("foundation_payments").select("id, member_id, amount, status, created_at").limit(8000);
   if(!fp.error) {
     const rows = fp.data || [];
-    // for eligibility: exclude pending if exists
+    // eligibility: exclude pending (if status exists)
     const eligRows = rows.filter(r => {
       const hasStatus = Object.prototype.hasOwnProperty.call(r, "status");
       if(!hasStatus) return true;
       const s = String(r.status||"").toLowerCase();
-      if(s === "pending") return false;
-      return true;
+      return s !== "pending";
     });
-    // history should show ALL rows
     foundationHistory = rows;
     return eligRows;
   }
@@ -691,14 +746,23 @@ async function loadFoundationPayments(){
 }
 
 async function loadFines(){
-  // Try created_at ordering first
   let q = await sb.from("fines").select("*").order("created_at", { ascending:false }).limit(300);
   if(!q.error) return q.data || [];
 
-  // Fallback: order by id if created_at doesn't exist
   q = await sb.from("fines").select("*").order("id", { ascending:false }).limit(300);
   if(q.error) throw q.error;
   return q.data || [];
+}
+
+async function loadRepayments(){
+  // Works with your screenshot columns
+  let r = await sb.from("repayments").select("*").order("created_at", { ascending:false }).limit(500);
+  if(!r.error) return r.data || [];
+
+  // fallback order by id
+  r = await sb.from("repayments").select("*").order("id", { ascending:false }).limit(500);
+  if(r.error) throw r.error;
+  return r.data || [];
 }
 
 /* =========================
@@ -715,15 +779,11 @@ async function reloadAll(){
   if(m.error) return sideErr("members: " + m.error.message);
   members = m.data || [];
 
-  try{
-    contributions = await loadContributions();
-  }catch(e){
-    return sideErr("contributions: " + (e?.message || String(e)));
-  }
+  try{ contributions = await loadContributions(); }
+  catch(e){ return sideErr("contributions: " + (e?.message || String(e))); }
 
-  try{
-    foundationPayments = await loadFoundationPayments();
-  }catch(e){
+  try{ foundationPayments = await loadFoundationPayments(); }
+  catch(e){
     foundationPayments = [];
     foundationHistory = [];
     console.warn("foundation_payments blocked:", e?.message || e);
@@ -737,14 +797,19 @@ async function reloadAll(){
   if(p.error) return sideErr("payouts: " + p.error.message);
   payouts = p.data || [];
 
+  try{ repayments = await loadRepayments(); }
+  catch(e){
+    repayments = [];
+    console.warn("repayments blocked:", e?.message || e);
+  }
+
   if(isAdmin){
     const pr = await sb.from("profiles").select("id, role, approved, member_id");
     if(pr.error) return sideErr("profiles: " + pr.error.message);
     profiles = pr.data || [];
 
-    try{
-      fines = await loadFines();
-    }catch(e){
+    try{ fines = await loadFines(); }
+    catch(e){
       fines = [];
       console.warn("fines blocked:", e?.message || e);
     }
@@ -840,6 +905,30 @@ function renderAll(){
   $("nextPosition").textContent = next ? String(next.position ?? (nextIndex+1)) : "—";
   $("nextPayoutDate").textContent = appState.next_payout_date ? String(appState.next_payout_date) : "—";
 
+  // dropdowns
+  const optsAll = (members||[]).map(m=>`<option value="${m.id}">${m.name}</option>`).join("");
+  $("cMember").innerHTML = optsAll;
+  $("lBorrower").innerHTML = optsAll;
+  $("lSurety").innerHTML = optsAll;
+  $("fpMember").innerHTML = optsAll;
+  $("fMember").innerHTML = optsAll;
+  $("rMember").innerHTML = optsAll;
+
+  // borrower locked for members
+  if(!isAdmin && currentMemberId != null){
+    $("lBorrower").value = String(currentMemberId);
+    $("lBorrower").disabled = true;
+  } else {
+    $("lBorrower").disabled = false;
+  }
+
+  // loans dropdown for repayment: active loans
+  const activeLoans = (loans||[]).filter(l=>String(l.status||"").toLowerCase()==="active");
+  $("rLoan").innerHTML = activeLoans.map(l=>{
+    const due = Number(l.total_due ?? (Number(l.principal||0)+Number(l.interest||0)));
+    return `<option value="${l.id}">Loan #${l.id} (${money(due)})</option>`;
+  }).join("") || `<option value="">No active loans</option>`;
+
   // member table
   $("memberBody").innerHTML = (members||[]).map(m=>{
     const mid = String(m.id);
@@ -857,24 +946,6 @@ function renderAll(){
       </tr>
     `;
   }).join("") || `<tr><td colspan="7" class="sub">No members</td></tr>`;
-
-  // dropdowns
-  const optsAll = (members||[]).map(m=>`<option value="${m.id}">${m.name}</option>`).join("");
-  $("cMember").innerHTML = optsAll;
-  $("lBorrower").innerHTML = optsAll;
-  $("lSurety").innerHTML = optsAll;
-
-  // ✅ new dropdowns
-  if($("fpMember")) $("fpMember").innerHTML = optsAll;
-  if($("fMember")) $("fMember").innerHTML = optsAll;
-
-  // member locks borrower
-  if(!isAdmin && currentMemberId != null){
-    $("lBorrower").value = String(currentMemberId);
-    $("lBorrower").disabled = true;
-  } else {
-    $("lBorrower").disabled = false;
-  }
 
   // admin approvals
   if(isAdmin){
@@ -915,42 +986,49 @@ function renderAll(){
     </tr>`;
   }).join("") || `<tr><td colspan="8" class="sub">No loans</td></tr>`;
 
-  // payouts
+  // payouts history
   $("payoutBody").innerHTML = (payouts||[]).map(x=>`
     <tr>
-      <td>${x.payout_date||""}</td>
+      <td>${x.payout_date||fmtDate(x.created_at)||""}</td>
       <td>${x.member_name||""}</td>
       <td class="tdMoney">${money(x.payout_amount||0)}</td>
     </tr>
   `).join("") || `<tr><td colspan="3" class="sub">No payouts</td></tr>`;
 
-  // ✅ foundation history table
-  if($("foundationBody")){
-    const byId = Object.fromEntries(members.map(m=>[String(m.id), m]));
-    $("foundationBody").innerHTML = (foundationHistory||[]).slice(0,300).map(r=>{
-      const mem = byId[String(r.member_id)];
-      return `<tr>
-        <td>${fmtDate(r.created_at)}</td>
-        <td>${mem?.name || r.member_name || ("member_id="+r.member_id)}</td>
-        <td class="tdMoney">${money(r.amount||0)}</td>
-        <td>${badge(r.status || "paid")}</td>
-      </tr>`;
-    }).join("") || `<tr><td colspan="4" class="sub">No foundation payments</td></tr>`;
-  }
+  // foundation history
+  const byId = Object.fromEntries(members.map(m=>[String(m.id), m]));
+  $("foundationBody").innerHTML = (foundationHistory||[]).slice(0,300).map(r=>{
+    const mem = byId[String(r.member_id)];
+    return `<tr>
+      <td>${fmtDate(r.created_at)}</td>
+      <td>${mem?.name || r.member_name || ("member_id="+r.member_id)}</td>
+      <td class="tdMoney">${money(r.amount||0)}</td>
+      <td>${badge(r.status || "paid")}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="4" class="sub">No foundation payments</td></tr>`;
 
-  // ✅ fine history table
-  if($("fineBody")){
-    const byId = Object.fromEntries(members.map(m=>[String(m.id), m]));
-    $("fineBody").innerHTML = (fines||[]).map(r=>{
-      const mem = byId[String(r.member_id)];
-      return `<tr>
-        <td>${fmtDate(r.created_at)}</td>
-        <td>${r.member_name || mem?.name || ("member_id="+r.member_id)}</td>
-        <td class="tdMoney">${money(r.amount||0)}</td>
-        <td>${r.reason || ""}</td>
-      </tr>`;
-    }).join("") || `<tr><td colspan="4" class="sub">No fines</td></tr>`;
-  }
+  // fines history (admin loads; members will see empty)
+  $("fineBody").innerHTML = (fines||[]).map(r=>{
+    const mem = byId[String(r.member_id)];
+    return `<tr>
+      <td>${fmtDate(r.created_at)}</td>
+      <td>${r.member_name || mem?.name || ("member_id="+r.member_id)}</td>
+      <td class="tdMoney">${money(r.amount||0)}</td>
+      <td>${r.reason || ""}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="4" class="sub">${isAdmin ? "No fines" : "Admin only"}</td></tr>`;
+
+  // repayments history
+  $("repayCount").textContent = String(repayments.length || 0);
+  $("repayBody").innerHTML = (repayments||[]).map(r=>{
+    const mem = byId[String(r.member_id)];
+    return `<tr>
+      <td>${fmtDate(r.paid_at || r.created_at)}</td>
+      <td>${mem?.name || r.member_name || ("member_id="+r.member_id)}</td>
+      <td>${r.loan_id ?? ""}</td>
+      <td class="tdMoney">${money(r.amount||0)}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="4" class="sub">No repayments</td></tr>`;
 
   // histogram
   const labels = (members||[]).map(m=>m.name||"");
@@ -969,6 +1047,12 @@ function renderAll(){
       }
     }
   });
+
+  // disable admin-only write buttons when not admin
+  $("btnAddMember").disabled = !isAdmin;
+  $("btnAddContrib").disabled = !isAdmin;
+  $("btnAddFoundationPayment").disabled = !isAdmin;
+  $("btnAddFine").disabled = !isAdmin;
 }
 
 /* =========================
@@ -1019,7 +1103,6 @@ async function addContribution(){
   await reloadAll();
 }
 
-/* ✅ ADD FOUNDATION PAYMENT (Admin) */
 async function addFoundationPayment(){
   if(!isAdmin) return toast("Admin only");
   const member_id = $("fpMember").value;
@@ -1030,7 +1113,6 @@ async function addFoundationPayment(){
   const mem = members.find(m=>String(m.id)===String(member_id));
   const nowIso = new Date().toISOString();
 
-  // Insert into foundation_payments (try common shapes)
   let ins = await sb.from("foundation_payments").insert([{
     member_id,
     member_name: mem?.name || null,
@@ -1041,17 +1123,11 @@ async function addFoundationPayment(){
 
   if(ins.error){
     ins = await sb.from("foundation_payments").insert([{
-      member_id,
-      amount,
-      status: "paid",
-      created_at: nowIso
+      member_id, amount, status: "paid", created_at: nowIso
     }]);
   }
   if(ins.error){
-    ins = await sb.from("foundation_payments").insert([{
-      member_id,
-      amount
-    }]);
+    ins = await sb.from("foundation_payments").insert([{ member_id, amount }]);
   }
   if(ins.error) return toast(ins.error.message);
 
@@ -1064,11 +1140,10 @@ async function addFoundationPayment(){
   if(upS.error) return toast("app_state update: " + upS.error.message);
 
   $("fpAmount").value="";
-  toast("Foundation payment saved");
+  toast("Foundation saved");
   await reloadAll();
 }
 
-/* ✅ ADD FINE (Admin) */
 async function addFine(){
   if(!isAdmin) return toast("Admin only");
   const member_id = $("fMember").value;
@@ -1080,7 +1155,6 @@ async function addFine(){
   const mem = members.find(m=>String(m.id)===String(member_id));
   const nowIso = new Date().toISOString();
 
-  // Insert into fines (try common shapes seen in your screenshot)
   let ins = await sb.from("fines").insert([{
     member_id,
     member_name: mem?.name || null,
@@ -1091,24 +1165,50 @@ async function addFine(){
 
   if(ins.error){
     ins = await sb.from("fines").insert([{
-      member_id,
-      amount,
-      reason: reason || null,
-      created_at: nowIso
+      member_id, amount, reason: reason || null, created_at: nowIso
     }]);
   }
   if(ins.error){
-    ins = await sb.from("fines").insert([{
-      member_id,
-      amount,
-      reason: reason || null
-    }]);
+    ins = await sb.from("fines").insert([{ member_id, amount, reason: reason || null }]);
   }
   if(ins.error) return toast(ins.error.message);
 
   $("fAmount").value="";
   $("fReason").value="";
   toast("Fine saved");
+  await reloadAll();
+}
+
+async function addRepayment(){
+  if(!isAdmin) return toast("Admin only");
+  const member_id = $("rMember").value;
+  const loan_id = $("rLoan").value;
+  const amount = Number($("rAmount").value||0);
+
+  if(!member_id) return toast("Select member");
+  if(!loan_id) return toast("Select loan");
+  if(amount<=0) return toast("Enter amount");
+
+  const nowIso = new Date().toISOString();
+  let ins = await sb.from("repayments").insert([{
+    member_id,
+    loan_id,
+    amount,
+    paid_at: nowIso,
+    created_at: nowIso
+  }]);
+
+  if(ins.error){
+    // fallback if table doesn't have created_at
+    ins = await sb.from("repayments").insert([{
+      member_id, loan_id, amount, paid_at: nowIso
+    }]);
+  }
+
+  if(ins.error) return toast(ins.error.message);
+
+  $("rAmount").value="";
+  toast("Repayment saved");
   await reloadAll();
 }
 
@@ -1260,7 +1360,7 @@ async function approveLoan(loanId){
 }
 
 /* =========================
-   RUN PAYOUT (kept)
+   RUN PAYOUT
 ========================= */
 async function runPayout(){
   if(!isAdmin) return toast("Admin only");
@@ -1322,26 +1422,26 @@ document.addEventListener("DOMContentLoaded", async ()=>{
         : (sec==="members") ? "Admin: add members + approve logins"
         : (sec==="contrib") ? "Admin: add contributions"
         : (sec==="loans") ? "Member: request. Admin: approve."
+        : (sec==="repayments") ? "All users view; Admin adds repayments"
         : (sec==="foundation") ? "Admin: add foundation payment + history"
         : (sec==="fines") ? "Admin: add fines + history"
-        : "Admin: run payouts";
+        : "Payout history; Admin can run payout";
       showSection(sec, title, hint);
     };
   });
 
-  // admin actions
+  // actions
   $("btnAddMember").onclick = addMember;
   $("btnAddContrib").onclick = addContribution;
-
-  // ✅ new actions
   $("btnAddFoundationPayment").onclick = addFoundationPayment;
   $("btnAddFine").onclick = addFine;
+  $("btnAddRepayment").onclick = addRepayment;
 
   // payout buttons
   $("btnRunPayout").onclick = runPayout;
   $("btnRunPayout2").onclick = runPayout;
 
-  // loan action depends on role
+  // loan button
   $("btnLoanAction").onclick = async ()=>{
     if(isAdmin) return createActiveLoanAdmin();
     return requestLoan();
@@ -1349,7 +1449,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 
   setAuthMode("signin");
 
-  // auto restore session
+  // restore session
   try{
     const ok = await enforceGate();
     if(ok){
