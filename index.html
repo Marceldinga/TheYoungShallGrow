@@ -8,9 +8,6 @@
   <!-- Supabase JS v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
   <style>
     :root{
       --primary:#1f4b99;
@@ -31,6 +28,7 @@
       --shadow: 0 14px 40px rgba(15, 23, 42, .35);
       --shadow2: 0 8px 20px rgba(15, 23, 42, .25);
       --radius:18px;
+
       --ring: 0 0 0 4px rgba(42,106,223,.18);
     }
 
@@ -47,10 +45,8 @@
       min-height:100vh;
     }
 
-    #locked{
-      display:flex;align-items:center;justify-content:center;
-      min-height:100vh;padding:22px;
-    }
+    /* LOGIN */
+    #locked{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:22px;}
     .lockBox{
       width:min(520px,100%);
       background:var(--card);
@@ -59,19 +55,11 @@
       padding:18px;
       box-shadow:var(--shadow);
     }
-    .lockTop{
-      display:flex;align-items:center;justify-content:space-between;
-      gap:12px;margin-bottom:10px;
-    }
-    .brandMini{
-      display:flex;align-items:center;gap:10px;
-      font-weight:900; letter-spacing:.2px;
-    }
-    .dot{
-      width:10px;height:10px;border-radius:999px;
-      background:linear-gradient(135deg, var(--primary2), var(--accent));
-      box-shadow:0 0 18px rgba(42,106,223,.25);
-    }
+    .lockTop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
+    .brandMini{display:flex;align-items:center;gap:10px;font-weight:900; letter-spacing:.2px;}
+    .dot{width:10px;height:10px;border-radius:999px;background:linear-gradient(135deg, var(--primary2), var(--accent));box-shadow:0 0 18px rgba(42,106,223,.25);}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(31,75,153,.10);font-size:12px;white-space:nowrap;}
+    .sub{color:var(--muted);font-size:12px;margin-top:6px;line-height:1.4}
     .authTabs{display:flex;gap:10px;margin:10px 0 10px}
     .authTabs button{flex:1}
     .authHint{
@@ -83,7 +71,7 @@
       margin-bottom:10px;
     }
 
-    input{
+    input,select,textarea{
       width:100%;
       padding:12px 12px;
       border-radius:14px;
@@ -91,10 +79,11 @@
       background:var(--card2);
       color:var(--text);
       outline:none;
-      transition: box-shadow .12s ease, border-color .12s ease;
+      transition: box-shadow .12s ease, border-color .12s ease, transform .08s ease;
     }
-    input::placeholder{color:#94a3b8}
-    input:focus{
+    input::placeholder,textarea::placeholder{color:#94a3b8}
+    textarea{min-height:96px;resize:vertical}
+    input:focus,select:focus,textarea:focus{
       border-color: rgba(42,106,223,.45);
       box-shadow: var(--ring);
       background:var(--card2);
@@ -113,17 +102,8 @@
     }
     .btn:hover{filter:brightness(1.03)}
     .btn:active{transform: translateY(1px)}
-    .btn.ghost{
-      background:var(--card2);
-      box-shadow:none;
-      border-color: var(--border);
-      font-weight:700;
-    }
-    .btn.primary{
-      background: linear-gradient(135deg, rgba(31,75,153,.98), rgba(42,106,223,.95));
-      color:#fff;
-      border-color: rgba(31,75,153,.30);
-    }
+    .btn.ghost{background:var(--card2);box-shadow:none;border-color: var(--border);font-weight:700;}
+    .btn.primary{background: linear-gradient(135deg, rgba(31,75,153,.98), rgba(42,106,223,.95));color:#fff;border-color: rgba(31,75,153,.30);}
     .btn:disabled{opacity:.55;cursor:not-allowed;filter:grayscale(20%);box-shadow:none}
 
     .lockGrid{display:grid;grid-template-columns:1fr;gap:10px}
@@ -136,23 +116,14 @@
       display:none;
     }
 
+    /* APP */
     .wrap{display:flex;min-height:100vh}
     .sidebar{
-      width:330px;
-      padding:16px;
-      border-right:1px solid var(--border);
-      background:rgba(21,28,47,.92);
-      backdrop-filter: blur(10px);
+      width:330px;padding:16px;border-right:1px solid var(--border);
+      background:rgba(21,28,47,.92);backdrop-filter: blur(10px);
     }
     .main{flex:1;padding:18px}
-
-    .brand{
-      font-weight:900;
-      font-size:16px;
-      letter-spacing:.2px;
-      display:flex;align-items:center;gap:10px;
-    }
-    .sub{color:var(--muted);font-size:12px;margin-top:6px;line-height:1.4}
+    .brand{font-weight:900;font-size:16px;letter-spacing:.2px;display:flex;align-items:center;gap:10px;}
     .card{
       background:var(--card);
       border:1px solid var(--border);
@@ -162,29 +133,67 @@
       box-shadow:var(--shadow2);
     }
     .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
-    .pill{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      background:rgba(31,75,153,.10);
-      font-size:12px;
-      color:var(--text);
-      white-space:nowrap;
+    .nav{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+    .nav button{
+      width:100%;text-align:left;padding:11px 12px;border-radius:14px;
+      border:1px solid var(--border);background:var(--card2);color:var(--text);
+      cursor:pointer;font-weight:800;
     }
-    .pill b{font-weight:900}
+    .nav button.active{border-color: rgba(42,106,223,.55);box-shadow: 0 0 0 3px rgba(42,106,223,.18) inset;background: rgba(42,106,223,.14);}
+    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+    .titleWrap{display:flex;flex-direction:column;gap:4px}
+    .title{font-size:18px;font-weight:900}
+    .section{display:none}
+    .section.active{display:block}
+
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+
+    .kpi .label{color:var(--muted);font-size:12px;font-weight:800}
+    .kpi .val{font-size:22px;font-weight:1000;margin-top:6px}
+
+    label{display:block;color:var(--muted);font-size:12px;margin-top:10px;font-weight:800;}
+
+    .tableWrap{overflow:auto;border-radius:14px;border:1px solid var(--border);margin-top:10px}
+    table{width:100%;border-collapse:separate;border-spacing:0;min-width:720px;background:var(--card)}
+    th,td{padding:10px 10px;border-bottom:1px solid var(--border);text-align:left;font-size:12px;vertical-align:top;}
+    th{color:var(--muted);font-weight:900;background:#1f2937;position:sticky; top:0; z-index:1;}
+    tbody tr:nth-child(even) td{background:#19213a}
+    tbody tr:hover td{background:rgba(42,106,223,.12)}
+    .tdMoney{text-align:right;font-variant-numeric: tabular-nums;}
+    .tdCenter{text-align:center}
+
+    .badge{
+      display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;
+      font-size:11px;font-weight:900;border:1px solid transparent;white-space:nowrap;
+    }
+    .badge::before{content:"";width:8px;height:8px;border-radius:999px;background: currentColor;opacity:.95;box-shadow:0 0 0 3px rgba(0,0,0,.12);}
+    .b-pending{color:#f59e0b;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.25)}
+    .b-active{color:#60a5fa;background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.25)}
+    .b-cleared{color:#34d399;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.25)}
+    .b-paid{color:#34d399;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.25)}
+    .b-unpaid{color:#f87171;background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.25)}
+    .b-partial{color:#2dd4bf;background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.22)}
+    .b-unknown{color:#cbd5e1;background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.22)}
+
+    .helper{margin-top:10px;font-size:12px;color:var(--muted);background:rgba(31,75,153,.10);border:1px solid rgba(31,75,153,.18);padding:10px 12px;border-radius:14px;}
 
     #toast{
       position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
-      background:rgba(15,23,42,.92);
-      color:#fff;
-      padding:10px 14px;
-      border-radius:14px;
-      box-shadow:var(--shadow);
-      display:none;
-      z-index:9999;
-      max-width:min(560px,92vw);
-      font-size:13px;
+      background:rgba(15,23,42,.92); color:#fff; padding:10px 14px;border-radius:14px;
+      box-shadow:var(--shadow); display:none; z-index:9999; max-width:min(560px,92vw); font-size:13px;
+    }
+
+    @media (max-width:1100px){
+      .grid4{grid-template-columns:1fr 1fr}
+      .grid2{grid-template-columns:1fr}
+      .sidebar{width:100%;max-width:360px}
+    }
+    @media (max-width:740px){
+      .wrap{flex-direction:column}
+      .sidebar{max-width:none;border-right:none;border-bottom:1px solid var(--border)}
+      .main{padding:14px}
+      table{min-width:640px}
     }
   </style>
 </head>
@@ -223,7 +232,7 @@
   </div>
 </div>
 
-<!-- APP (simple placeholder so login completes) -->
+<!-- APP -->
 <div id="app" class="wrap" style="display:none;">
   <aside class="sidebar">
     <div class="brand"><span class="dot"></span> TheYoungShallGrow: Dashboard</div>
@@ -235,16 +244,187 @@
       <button class="btn ghost" style="width:100%;margin-top:10px" type="button" id="btnLogout">Logout</button>
       <div id="sideErr" class="err"></div>
     </div>
+
+    <div class="nav">
+      <button id="navDash" class="active" type="button" data-sec="dash">Dashboard</button>
+      <button id="navMembers" type="button" data-sec="members">Members</button>
+      <button id="navContrib" type="button" data-sec="contrib">Contributions</button>
+      <button id="navLoans" type="button" data-sec="loans">Loans</button>
+      <button id="navPayouts" type="button" data-sec="payouts">Payouts</button>
+      <button class="btn ghost" style="margin-top:6px" type="button" id="btnRefresh">Refresh</button>
+    </div>
   </aside>
 
   <main class="main">
-    <div class="card">
-      <div style="font-weight:900">✅ Login Success</div>
-      <div class="sub" style="margin-top:8px">
-        If you see this screen, authentication + profiles gate is working.
-        Next step is loading your tables (members, contributions, loans, etc.).
+    <div class="topbar">
+      <div class="titleWrap">
+        <div class="title" id="pageTitle">Dashboard</div>
+        <div class="sub" id="roleHint">Business overview</div>
       </div>
+      <span class="pill">Total Interest: <b id="kInterestMini">$0</b></span>
     </div>
+
+    <section id="dash" class="section active">
+      <div class="grid4">
+        <div class="card kpi">
+          <div class="label">Njangi Pot</div>
+          <div class="val" id="kPot">$0</div>
+          <div class="sub">Sum of contributions</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Foundation</div>
+          <div class="val" id="kFoundation">$0</div>
+          <div class="sub">Available for loans</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Outstanding Loans</div>
+          <div class="val" id="kLoans">$0</div>
+          <div class="sub">Total due</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Members</div>
+          <div class="val" id="kMembers">0</div>
+          <div class="sub">Rotation list</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:1000">Recent History</div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>Time</th><th>Type</th><th>Member</th><th class="tdMoney">Amount</th><th class="tdCenter">Interest %</th><th class="tdMoney">Total Due</th></tr></thead>
+            <tbody id="recentBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="members" class="section">
+      <div class="grid2">
+        <div class="card" id="adminMemberBox">
+          <div style="font-weight:1000;">Add Member (Admin)</div>
+          <div class="helper">Members can sign up only if their email exists in <b>members.email</b>.</div>
+
+          <label>Name</label><input id="mName" placeholder="e.g. John Doe" />
+          <label>Email</label><input id="mEmail" placeholder="e.g. john@email.com" />
+          <label>Phone</label><input id="mPhone" placeholder="optional" />
+          <button class="btn primary" style="width:100%;margin-top:12px" type="button" id="btnAddMember">Add Member</button>
+
+          <hr style="border:0;border-top:1px solid var(--border);margin:14px 0;">
+
+          <div style="font-weight:1000;">Approve Pending Logins (Admin)</div>
+          <div class="sub" style="margin-top:6px;">Approve members who signed up (profiles.approved = true).</div>
+
+          <div class="tableWrap">
+            <table>
+              <thead><tr><th>Auth User</th><th>Member</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="approveBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row"><div style="font-weight:1000;">Member List</div><span class="pill">Total: <span id="memberCount">0</span></span></div>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th><th>Email</th>
+                  <th class="tdMoney">Njangi</th>
+                  <th class="tdMoney">Foundation</th>
+                  <th class="tdMoney">Loan Due</th>
+                  <th class="tdMoney">Payout Total</th>
+                </tr>
+              </thead>
+              <tbody id="memberBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="contrib" class="section">
+      <div class="grid2">
+        <div class="card" id="adminContribBox">
+          <div style="font-weight:1000;">Add Contribution (Admin)</div>
+          <label>Member</label><select id="cMember"></select>
+          <label>Amount (multiple of 500)</label><input id="cAmount" type="number" placeholder="e.g. 500" />
+          <button class="btn primary" style="width:100%;margin-top:12px" type="button" id="btnAddContrib">Save Contribution</button>
+          <div class="helper">Rule: Contribution must be multiple of <b>500</b>.</div>
+        </div>
+
+        <div class="card">
+          <div style="font-weight:1000;">Notes</div>
+          <div class="sub" style="margin-top:8px">
+            Members can view their contributions (read-only). Admin records contributions here.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="loans" class="section">
+      <div class="grid2">
+        <div class="card">
+          <div style="font-weight:1000;" id="loanBoxTitle">Request Loan</div>
+
+          <div class="helper" id="memberLoanHint" style="display:none;">
+            Members can request a loan. It will be <b>Pending</b> until admin approves.
+          </div>
+
+          <label>Borrower</label>
+          <select id="lMember"></select>
+
+          <label>Amount</label>
+          <input id="lAmount" type="number" placeholder="e.g. 2000" />
+
+          <button class="btn primary" style="width:100%;margin-top:12px" type="button" id="btnLoanAction">Request Loan</button>
+
+          <div class="helper" id="adminLoanHint" style="display:none;">
+            Admin approves pending loans in the table on the right. (Rules are enforced in Supabase.)
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row"><div style="font-weight:1000;">Loans</div><span class="pill">Newest first</span></div>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th><th>Member</th>
+                  <th class="tdMoney">Principal</th>
+                  <th class="tdMoney">Interest</th>
+                  <th class="tdMoney">Total Due</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="loanBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="payouts" class="section">
+      <div class="grid2">
+        <div class="card" id="adminPayoutBox">
+          <div style="font-weight:1000;">Run Payout (Admin)</div>
+          <div class="sub" style="margin-top:6px;">When payout runs: inserts into <b>payouts</b> and updates member <b>payout_total</b>.</div>
+          <button class="btn primary" style="width:100%;margin-top:12px" type="button" id="btnRunPayout">Run Now</button>
+        </div>
+
+        <div class="card">
+          <div style="font-weight:1000;">Payout History</div>
+          <div class="tableWrap">
+            <table>
+              <thead><tr><th>Date</th><th>Member</th><th class="tdMoney">Amount</th></tr></thead>
+              <tbody id="payoutBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -252,7 +432,7 @@
 
 <script>
 /* =========================================================
-   SUPABASE CONFIG (YOUR PROJECT)
+   SUPABASE CONFIG
 ========================================================= */
 const SUPABASE_URL = "https://ficlrtvrrzfiakmciwel.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpY2xydHZycnpmaWFrbWNpd2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxMjk0MDQsImV4cCI6MjA4MjcwNTQwNH0.xWuH_-amYd_24R8PURbZXMUDjz--Q9R_RASOdGzsZJI";
@@ -261,17 +441,32 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
 });
 
+/* =========================================================
+   STATE
+========================================================= */
 let AUTH_MODE = "signin";
+let isAdmin = false;
+let currentMemberId = null;
+let profileApproved = false;
 
-/* ===========================
+let appState = null;
+let members = [];
+let profiles = [];
+let contributions = [];
+let loans = [];
+let payouts = [];
+let history = [];
+
+/* =========================================================
    UI HELPERS
-=========================== */
+========================================================= */
+const money = (x) => "$" + (Number(x)||0).toLocaleString();
 function toast(msg){
   const el = document.getElementById("toast");
   el.textContent = String(msg || "");
   el.style.display = "block";
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => { el.style.display = "none"; }, 3500);
+  toast._t = setTimeout(() => { el.style.display = "none"; }, 3000);
 }
 function lockErr(msg){
   const el = document.getElementById("lockErr");
@@ -284,6 +479,16 @@ function sideErr(msg){
   el.style.display = msg ? "block" : "none";
   el.textContent = msg || "";
 }
+function badge(statusRaw){
+  const s = String(statusRaw||"").toLowerCase();
+  if(s==="pending") return `<span class="badge b-pending">Pending</span>`;
+  if(s==="active") return `<span class="badge b-active">Active</span>`;
+  if(s==="cleared") return `<span class="badge b-cleared">Cleared</span>`;
+  if(s==="paid") return `<span class="badge b-paid">Paid</span>`;
+  if(s==="unpaid") return `<span class="badge b-unpaid">Unpaid</span>`;
+  if(s==="partial") return `<span class="badge b-partial">Partial</span>`;
+  return `<span class="badge b-unknown">${statusRaw || "—"}</span>`;
+}
 function setAuthLoading(on){
   const btn = document.getElementById("btnAuth");
   btn.disabled = !!on;
@@ -291,45 +496,83 @@ function setAuthLoading(on){
 }
 function applyAuthModeUI(){
   const su = document.getElementById("signupFields");
-  const btn = document.getElementById("btnAuth");
   const tabIn = document.getElementById("tabSignIn");
   const tabUp = document.getElementById("tabSignUp");
+  const btn = document.getElementById("btnAuth");
 
   if(AUTH_MODE === "signup"){
     su.style.display = "block";
-    btn.textContent = "Create account";
     tabUp.classList.remove("ghost"); tabUp.classList.add("primary");
     tabIn.classList.add("ghost"); tabIn.classList.remove("primary");
+    btn.textContent = "Create account";
   } else {
     su.style.display = "none";
-    btn.textContent = "Sign in";
     tabIn.classList.remove("ghost"); tabIn.classList.add("primary");
     tabUp.classList.add("ghost"); tabUp.classList.remove("primary");
+    btn.textContent = "Sign in";
   }
 }
 function setAuthMode(mode){
   AUTH_MODE = (mode === "signup") ? "signup" : "signin";
-  lockErr(""); sideErr("");
+  lockErr("");
+  sideErr("");
   applyAuthModeUI();
 }
 
-/* ===========================
-   HARD TIMEOUT (prevents infinite "Please wait...")
-=========================== */
-function withTimeout(promise, ms, label){
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms/1000}s`)), ms))
-  ]);
+/* =========================================================
+   NAV
+========================================================= */
+function show(sec){
+  document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+  document.getElementById(sec).classList.add("active");
+  document.getElementById("pageTitle").textContent =
+    sec === "dash" ? "Dashboard" :
+    sec === "members" ? "Members" :
+    sec === "contrib" ? "Contributions" :
+    sec === "loans" ? "Loans" :
+    "Payouts";
+
+  document.getElementById("roleHint").textContent =
+    sec === "dash" ? "Business overview" :
+    sec === "members" ? "Admin registers members + approves logins" :
+    sec === "contrib" ? "Admin records contributions" :
+    sec === "loans" ? "Members request loans; Admin approves" :
+    "Admin runs payouts";
+
+  document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
+  const map = {dash:"navDash",members:"navMembers",contrib:"navContrib",loans:"navLoans",payouts:"navPayouts"};
+  document.getElementById(map[sec])?.classList.add("active");
 }
 
-/* ===========================
-   LOGIN GATE: profiles
-=========================== */
-async function enforceAdminGate(){
+/* =========================================================
+   SAFE INSERT (handles optional columns)
+   - tries payload
+   - if DB complains "column X does not exist" it removes that field and retries
+========================================================= */
+async function safeInsert(table, payload){
+  const tryOnce = async (obj) => sb.from(table).insert([obj]).select().maybeSingle();
+
+  let obj = {...payload};
+  for(let i=0;i<8;i++){
+    const res = await tryOnce(obj);
+    if(!res.error) return res;
+    const msg = String(res.error.message || "");
+    const m = msg.match(/column ["']?([a-zA-Z0-9_]+)["']? does not exist/i);
+    if(m && m[1] && Object.prototype.hasOwnProperty.call(obj, m[1])){
+      delete obj[m[1]];
+      continue;
+    }
+    return res;
+  }
+  return { data:null, error:{ message:"Insert failed after retries" } };
+}
+
+/* =========================================================
+   AUTH GATE (profiles)
+========================================================= */
+async function enforceGate(){
   const { data: userRes, error: userErr } = await sb.auth.getUser();
   if(userErr) throw userErr;
-
   const user = userRes?.user;
   if(!user) return false;
 
@@ -342,11 +585,11 @@ async function enforceAdminGate(){
   if(error) throw error;
   if(!profile) throw new Error("No profiles row for this user.");
 
-  // Require approved for members, admins always pass
-  const isAdmin = (profile.role === "admin");
-  const approved = !!profile.approved;
+  isAdmin = (profile.role === "admin");
+  profileApproved = !!profile.approved;
+  currentMemberId = profile.member_id ?? null;
 
-  if(!isAdmin && !approved){
+  if(!isAdmin && !profileApproved){
     await sb.auth.signOut();
     lockErr("Your account is pending admin approval. Please wait for admin to approve.");
     return false;
@@ -359,44 +602,44 @@ async function enforceAdminGate(){
   document.getElementById("role").textContent = profile.role || "member";
   document.getElementById("today").textContent = new Date().toLocaleDateString();
 
+  // hide admin-only boxes for members
+  document.getElementById("adminMemberBox").style.display = isAdmin ? "block" : "none";
+  document.getElementById("adminContribBox").style.display = isAdmin ? "block" : "none";
+  document.getElementById("adminPayoutBox").style.display = isAdmin ? "block" : "none";
+  document.getElementById("kInterestMini").parentElement.style.display = isAdmin ? "inline-flex" : "none";
+
+  // loans: member = request only
+  document.getElementById("loanBoxTitle").textContent = isAdmin ? "Loan Approvals (Admin)" : "Request Loan";
+  document.getElementById("memberLoanHint").style.display = isAdmin ? "none" : "block";
+  document.getElementById("adminLoanHint").style.display = isAdmin ? "block" : "none";
+  document.getElementById("btnLoanAction").textContent = isAdmin ? "Admin: Approve from table" : "Request Loan";
+  document.getElementById("btnLoanAction").disabled = isAdmin; // admin approves using buttons on loan rows
+
   return true;
 }
 
-/* ===========================
-   AUTH
-=========================== */
+/* =========================================================
+   AUTH ACTIONS
+========================================================= */
 async function signIn(){
   lockErr(""); sideErr("");
   const email = document.getElementById("email").value.trim().toLowerCase();
   const password = document.getElementById("password").value;
 
-  if(!email || !password){
-    lockErr("Enter email and password.");
-    return;
-  }
+  if(!email || !password){ lockErr("Enter email and password."); return; }
 
   setAuthLoading(true);
-
   try{
-    // If your request is blocked by network/adblock, this is where it hangs.
-    const res = await withTimeout(
-      sb.auth.signInWithPassword({ email, password }),
-      15000,
-      "Sign in"
-    );
-
+    const res = await sb.auth.signInWithPassword({ email, password });
     if(res.error) throw res.error;
 
-    const ok = await withTimeout(enforceAdminGate(), 15000, "Profile check");
+    const ok = await enforceGate();
     if(!ok) return;
 
+    await reloadAll();
     toast("Welcome");
   }catch(e){
-    console.error("SIGNIN ERROR:", e);
-    lockErr(
-      (e?.message || String(e)) +
-      "\n\nIf this keeps timing out, your browser/network is blocking requests to Supabase."
-    );
+    lockErr(e?.message || String(e));
   }finally{
     setAuthLoading(false);
   }
@@ -407,38 +650,35 @@ async function signUp(){
   const email = document.getElementById("email").value.trim().toLowerCase();
   const password = document.getElementById("password").value;
 
-  if(!email || !password){
-    lockErr("Enter email and password.");
-    return;
-  }
+  if(!email || !password){ lockErr("Enter email and password."); return; }
 
   setAuthLoading(true);
-
   try{
-    // Only allow signup if email exists in members
-    const pre = await withTimeout(
-      sb.from("members").select("id,email").eq("email", email).maybeSingle(),
-      15000,
-      "Members lookup"
-    );
-
+    // signup allowed only if email exists in members
+    const pre = await sb.from("members").select("id,email,name").eq("email", email).maybeSingle();
     if(pre.error) throw pre.error;
-    if(!pre.data) throw new Error("Signup blocked: your email is not registered by admin yet.");
+    if(!pre.data) throw new Error("Signup blocked: your email is not registered by admin in members.email.");
 
-    const s = await withTimeout(
-      sb.auth.signUp({ email, password }),
-      15000,
-      "Sign up"
-    );
-
+    const s = await sb.auth.signUp({ email, password });
     if(s.error) throw s.error;
 
-    toast("Account created. Waiting for admin approval.");
+    // (optional) create/attach profile row if your DB trigger isn't doing it
+    const userId = s.data?.user?.id;
+    if(userId){
+      const up = await sb.from("profiles").upsert([{
+        id: userId,
+        role: "member",
+        approved: false,
+        member_id: pre.data.id
+      }]);
+      // ignore if blocked by RLS; admin can approve later
+      if(up.error) console.warn("profiles upsert:", up.error.message);
+    }
+
     await sb.auth.signOut();
     setAuthMode("signin");
-    lockErr("Your account is pending admin approval. Please wait.");
+    lockErr("Account created. Waiting for admin approval.");
   }catch(e){
-    console.error("SIGNUP ERROR:", e);
     lockErr(e?.message || String(e));
   }finally{
     setAuthLoading(false);
@@ -452,27 +692,447 @@ async function signOut(){
   document.getElementById("locked").style.display = "flex";
 }
 
-/* ===========================
+/* =========================================================
+   LOAD DATA (RLS will automatically filter for members)
+========================================================= */
+async function reloadAll(){
+  sideErr("");
+
+  // app_state
+  const st = await sb.from("app_state").select("*").eq("id", 1).maybeSingle();
+  if(st.error){
+    console.warn("app_state:", st.error.message);
+    appState = { id:1, foundation:0, total_interest_generated:0, next_payout_index:0, next_payout_date:null };
+  } else {
+    appState = st.data || { id:1, foundation:0, total_interest_generated:0, next_payout_index:0, next_payout_date:null };
+  }
+
+  const m = await sb.from("members").select("*").order("position", { ascending:true });
+  if(m.error) sideErr("members: " + m.error.message);
+  members = m.data || [];
+
+  const pr = await sb.from("profiles").select("id,role,approved,member_id");
+  if(pr.error){
+    // members may not have permission to read all profiles (that’s ok)
+    profiles = [];
+  } else {
+    profiles = pr.data || [];
+  }
+
+  const c = await sb.from("contributions").select("member_id,amount,kind,created_at").limit(5000);
+  if(c.error) console.warn("contributions:", c.error.message);
+  contributions = c.data || [];
+
+  const l = await sb.from("loans").select("*").order("issued_at", { ascending:false }).limit(300);
+  // if issued_at doesn't exist, retry by created_at
+  if(l.error && /issued_at/i.test(l.error.message || "")){
+    const l2 = await sb.from("loans").select("*").order("created_at", { ascending:false }).limit(300);
+    if(l2.error) sideErr("loans: " + l2.error.message);
+    loans = l2.data || [];
+  } else {
+    if(l.error) sideErr("loans: " + l.error.message);
+    loans = l.data || [];
+  }
+
+  const p = await sb.from("payouts").select("*").order("created_at", { ascending:false }).limit(200);
+  if(p.error) console.warn("payouts:", p.error.message);
+  payouts = p.data || [];
+
+  const h = await sb.from("history").select("*").order("created_at", { ascending:false }).limit(200);
+  // history might be admin-only; ok if blocked
+  history = h.error ? [] : (h.data || []);
+
+  renderAll();
+}
+
+/* =========================================================
+   RENDER
+========================================================= */
+function renderAll(){
+  const totals = {};
+  for(const r of contributions){
+    if(String(r.kind||"contribution") !== "contribution") continue;
+    const mid = String(r.member_id);
+    totals[mid] = (totals[mid]||0) + (Number(r.amount)||0);
+  }
+
+  // KPI
+  const pot = members.reduce((s,m)=> s + (totals[String(m.id)]||0), 0);
+  const outstanding = members.reduce((s,m)=> s + (Number(m.loan_due)||0), 0);
+
+  document.getElementById("kPot").textContent = money(pot);
+  document.getElementById("kFoundation").textContent = money(appState?.foundation || 0);
+  document.getElementById("kLoans").textContent = money(outstanding);
+  document.getElementById("kMembers").textContent = String(members.length);
+  document.getElementById("kInterestMini").textContent = money(appState?.total_interest_generated || 0);
+
+  // Members table
+  document.getElementById("memberCount").textContent = String(members.length);
+  document.getElementById("memberBody").innerHTML =
+    members.map(m=>`
+      <tr>
+        <td>${m.name||""}</td>
+        <td>${m.email||""}</td>
+        <td class="tdMoney">${money(totals[String(m.id)]||0)}</td>
+        <td class="tdMoney">${money(m.foundation_contrib||0)}</td>
+        <td class="tdMoney">${money(m.loan_due||0)}</td>
+        <td class="tdMoney">${money(m.payout_total||0)}</td>
+      </tr>
+    `).join("") || `<tr><td colspan="6" class="sub">No members.</td></tr>`;
+
+  // Dropdowns
+  const opts = members.map(m=>`<option value="${m.id}">${m.name}</option>`).join("");
+  document.getElementById("cMember").innerHTML = opts;
+  document.getElementById("lMember").innerHTML = opts;
+
+  // Lock borrower for member
+  const borrowerSel = document.getElementById("lMember");
+  if(!isAdmin){
+    if(currentMemberId != null){
+      borrowerSel.value = String(currentMemberId);
+      borrowerSel.disabled = true;
+    }
+  } else {
+    borrowerSel.disabled = false;
+  }
+
+  // Pending approvals (admin)
+  const approveBody = document.getElementById("approveBody");
+  if(isAdmin && approveBody){
+    const byId = Object.fromEntries(members.map(m=>[String(m.id), m]));
+    const pending = profiles.filter(p => p.role === "member" && !p.approved);
+    approveBody.innerHTML = pending.map(p=>{
+      const mem = p.member_id != null ? byId[String(p.member_id)] : null;
+      return `<tr>
+        <td>${p.id}</td>
+        <td>${mem ? (mem.name + " • " + mem.email) : ("member_id=" + (p.member_id ?? "null"))}</td>
+        <td>${badge("pending")}</td>
+        <td><button class="btn ghost" type="button" onclick="approveProfile('${p.id}')">Approve</button></td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="4" class="sub">No pending approvals.</td></tr>`;
+  } else if(approveBody){
+    approveBody.innerHTML = `<tr><td colspan="4" class="sub">Admin only.</td></tr>`;
+  }
+
+  // Loans table (member sees only theirs via RLS)
+  const membersById = Object.fromEntries(members.map(m=>[String(m.id), m]));
+  document.getElementById("loanBody").innerHTML =
+    loans.map(r=>{
+      const dt = r.issued_at ? new Date(r.issued_at).toLocaleString()
+               : r.created_at ? new Date(r.created_at).toLocaleString()
+               : "";
+      // support both schemas: member_id OR borrower_member_id
+      const borrowerId = (r.member_id ?? r.borrower_member_id);
+      const borrower = borrowerId != null ? membersById[String(borrowerId)] : null;
+      const st = String(r.status || "");
+      const canApprove = isAdmin && st.toLowerCase() === "pending";
+
+      return `<tr>
+        <td>${dt}</td>
+        <td>${r.borrower_name || borrower?.name || ("member_id=" + (borrowerId ?? ""))}</td>
+        <td class="tdMoney">${money(r.principal || 0)}</td>
+        <td class="tdMoney">${money(r.interest || 0)}</td>
+        <td class="tdMoney">${money(r.total_due || 0)}</td>
+        <td>${badge(st)}</td>
+        <td>${canApprove ? `<button class="btn ghost" type="button" onclick="approveLoan(${r.id})">Approve</button>` : "-"}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="7" class="sub">No loans yet.</td></tr>`;
+
+  // Payouts table
+  document.getElementById("payoutBody").innerHTML =
+    payouts.map(r=>{
+      const d = r.payout_date || (r.created_at ? new Date(r.created_at).toISOString().slice(0,10) : "");
+      const mid = r.member_id ?? r.member ?? r.memberId;
+      const mem = mid != null ? membersById[String(mid)] : null;
+      const name = r.member_name || mem?.name || "";
+      const amt = r.payout_amount ?? r.amount ?? 0;
+      return `<tr>
+        <td>${d}</td>
+        <td>${name || (mid!=null ? ("member_id=" + mid) : "")}</td>
+        <td class="tdMoney">${money(amt)}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="3" class="sub">No payouts yet.</td></tr>`;
+
+  // Recent history (if allowed)
+  const recentBody = document.getElementById("recentBody");
+  if(history.length){
+    recentBody.innerHTML = history.slice(0,15).map(x=>{
+      const t = x.created_at ? new Date(x.created_at).toLocaleString() : "";
+      return `<tr>
+        <td>${t}</td>
+        <td>${x.type||""}</td>
+        <td>${x.member||""}</td>
+        <td class="tdMoney">${money(x.amount||0)}</td>
+        <td class="tdCenter">${x.interest_percent ? (Number(x.interest_percent) + "%") : "-"}</td>
+        <td class="tdMoney">${x.total_due!=null ? money(x.total_due) : "-"}</td>
+      </tr>`;
+    }).join("");
+  } else {
+    recentBody.innerHTML = `<tr><td colspan="6" class="sub">History not available (may be admin-only).</td></tr>`;
+  }
+}
+
+/* =========================================================
+   WRITES
+========================================================= */
+async function addHistoryRow(type, member, amount, interestPercent=0, totalDue=null){
+  // history may be admin-only; ignore failures
+  const r = await sb.from("history").insert([{
+    type, member, amount,
+    interest_percent: interestPercent,
+    total_due: totalDue
+  }]);
+  if(r.error) console.warn("history:", r.error.message);
+}
+
+/* ADMIN: approve profile */
+async function approveProfile(profileId){
+  if(!isAdmin) return toast("Admin only");
+  const up = await sb.from("profiles").update({ approved:true }).eq("id", profileId);
+  if(up.error) return toast("Approve failed: " + up.error.message);
+  toast("Approved ✅");
+  await reloadAll();
+}
+
+/* ADMIN: add member */
+async function addMember(){
+  if(!isAdmin) return toast("Admin only");
+  const name = document.getElementById("mName").value.trim();
+  const email = (document.getElementById("mEmail").value.trim() || "").toLowerCase();
+  const phone = document.getElementById("mPhone").value.trim();
+
+  if(!name) return toast("Enter name");
+  if(!email) return toast("Enter email");
+
+  const maxPos = members.length ? Math.max(...members.map(m=>Number(m.position||0))) : 0;
+  const payload = { name, email, phone: phone || null, position: maxPos + 1 };
+
+  const ins = await safeInsert("members", payload);
+  if(ins.error) return toast("members insert: " + ins.error.message);
+
+  await addHistoryRow("Member Added", name, 0, 0, null);
+
+  document.getElementById("mName").value = "";
+  document.getElementById("mEmail").value = "";
+  document.getElementById("mPhone").value = "";
+
+  toast("Member added ✅");
+  await reloadAll();
+}
+
+/* ADMIN: add contribution */
+async function addContribution(){
+  if(!isAdmin) return toast("Admin only");
+  const memberId = document.getElementById("cMember").value;
+  const amt = Number(document.getElementById("cAmount").value || 0);
+
+  if(!memberId) return toast("Select member");
+  if(!amt || amt <= 0) return toast("Enter amount");
+  if(amt % 500 !== 0) return toast("Must be multiple of 500");
+
+  const mem = members.find(m=>String(m.id)===String(memberId));
+  const payload = {
+    member_id: memberId,
+    amount: amt,
+    kind: "contribution",
+    created_at: new Date().toISOString()
+  };
+
+  const ins = await safeInsert("contributions", payload);
+  if(ins.error) return toast("contributions insert: " + ins.error.message);
+
+  await addHistoryRow("Contribution", mem?.name || ("member_id=" + memberId), amt, 0, null);
+
+  document.getElementById("cAmount").value = "";
+  toast("Saved ✅");
+  await reloadAll();
+}
+
+/* MEMBER: request loan (pending) */
+async function requestLoan(){
+  if(isAdmin) return; // admin approves via table
+  const borrowerId = currentMemberId != null ? String(currentMemberId) : document.getElementById("lMember").value;
+  const amt = Number(document.getElementById("lAmount").value || 0);
+  if(!borrowerId) return toast("Borrower missing");
+  if(!amt || amt <= 0) return toast("Enter amount");
+
+  // Interest is handled by your rules in Supabase.
+  // But if your DB expects interest/total_due columns, we send placeholders (0) and let DB update if it wants.
+  const payload = {
+    member_id: borrowerId,
+    borrower_member_id: borrowerId, // in case your schema uses borrower_member_id
+    principal: amt,
+    interest: 0,
+    total_due: amt,
+    status: "pending",
+    issued_at: new Date().toISOString(),
+    created_at: new Date().toISOString()
+  };
+
+  const ins = await safeInsert("loans", payload);
+  if(ins.error) return toast("Loan request failed: " + ins.error.message);
+
+  await addHistoryRow("Loan Requested", (members.find(m=>String(m.id)===String(borrowerId))?.name || "Member"), amt, 0, amt);
+
+  document.getElementById("lAmount").value = "";
+  toast("Loan requested (Pending) ✅");
+  await reloadAll();
+}
+
+/* ADMIN: approve pending loan */
+async function approveLoan(loanId){
+  if(!isAdmin) return toast("Admin only");
+
+  const got = await sb.from("loans").select("*").eq("id", loanId).single();
+  if(got.error) return toast("Loan fetch: " + got.error.message);
+  const loan = got.data;
+
+  const st = String(loan.status||"").toLowerCase();
+  if(st !== "pending") return toast("Only pending loans can be approved");
+
+  const borrowerId = (loan.member_id ?? loan.borrower_member_id);
+  if(borrowerId == null) return toast("Loan has no member_id / borrower_member_id");
+
+  const principal = Number(loan.principal || 0);
+  const totalDue  = Number(loan.total_due || 0) || principal;
+
+  // Your rules are already in Supabase, but we still do the standard updates:
+  // 1) set loan active
+  const upLoan = await sb.from("loans").update({
+    status: "active",
+    updated_at: new Date().toISOString()
+  }).eq("id", loanId);
+  if(upLoan.error) return toast("Approve loan: " + upLoan.error.message);
+
+  // 2) update member loan_due (add total_due)
+  const mem = members.find(m=>String(m.id)===String(borrowerId));
+  const newDue = (Number(mem?.loan_due||0) + totalDue);
+
+  const upMem = await sb.from("members").update({
+    loan_due: newDue
+  }).eq("id", borrowerId);
+  if(upMem.error) return toast("Update member loan_due: " + upMem.error.message);
+
+  // 3) update app_state foundation (deduct principal) if app_state exists + column exists
+  if(appState && typeof appState.foundation !== "undefined"){
+    const newFoundation = Number(appState.foundation||0) - principal;
+    const upSt = await sb.from("app_state").update({
+      foundation: newFoundation,
+      updated_at: new Date().toISOString()
+    }).eq("id", 1);
+    if(upSt.error) console.warn("app_state update:", upSt.error.message);
+  }
+
+  await addHistoryRow("Loan Approved", mem?.name || "Member", principal, 0, totalDue);
+
+  toast("Loan approved ✅");
+  await reloadAll();
+}
+
+/* ADMIN: run payout (insert payout + update member payout_total) */
+async function runPayout(){
+  if(!isAdmin) return toast("Admin only");
+  if(!members.length) return toast("No members");
+
+  // pot = sum of contribution totals (kind=contribution)
+  const totals = {};
+  for(const r of contributions){
+    if(String(r.kind||"contribution") !== "contribution") continue;
+    const mid = String(r.member_id);
+    totals[mid] = (totals[mid]||0) + (Number(r.amount)||0);
+  }
+  const pot = members.reduce((s,m)=> s + (totals[String(m.id)]||0), 0);
+  if(pot <= 0) return toast("Pot is 0 (no contributions)");
+
+  // choose next payout member: use app_state.next_payout_index if exists, else first member
+  const idx = Number(appState?.next_payout_index || 0);
+  const payMember = members[idx % members.length];
+  if(!payMember) return toast("Next payout member not found");
+
+  const payoutDate = (appState?.next_payout_date) || (new Date().toISOString().slice(0,10));
+
+  // 1) insert payout
+  const payload = {
+    member_id: payMember.id,
+    member_name: payMember.name, // optional
+    payout_amount: pot,
+    payout_date: payoutDate,
+    created_at: new Date().toISOString()
+  };
+  const ins = await safeInsert("payouts", payload);
+  if(ins.error) return toast("payouts insert: " + ins.error.message);
+
+  // 2) update member payout_total
+  const newTotal = Number(payMember.payout_total||0) + pot;
+  const upMem = await sb.from("members").update({
+    payout_total: newTotal
+  }).eq("id", payMember.id);
+  if(upMem.error) return toast("Update payout_total: " + upMem.error.message);
+
+  // 3) advance app_state index/date if possible
+  if(appState){
+    const nextIdx = idx + 1;
+    let nextDate = null;
+    try{
+      const d = new Date(payoutDate + "T00:00:00");
+      d.setDate(d.getDate() + 14);
+      nextDate = d.toISOString().slice(0,10);
+    }catch{}
+    const upSt = await sb.from("app_state").update({
+      next_payout_index: nextIdx,
+      next_payout_date: nextDate || payoutDate,
+      updated_at: new Date().toISOString()
+    }).eq("id", 1);
+    if(upSt.error) console.warn("app_state advance:", upSt.error.message);
+  }
+
+  await addHistoryRow("Payout", payMember.name, pot, 0, null);
+
+  toast(`Payout to ${payMember.name} ✅`);
+  await reloadAll();
+}
+
+/* =========================================================
    INIT / WIRE UI
-=========================== */
+========================================================= */
 document.addEventListener("DOMContentLoaded", async () => {
+  // tabs
   document.getElementById("tabSignIn").addEventListener("click", ()=>setAuthMode("signin"));
   document.getElementById("tabSignUp").addEventListener("click", ()=>setAuthMode("signup"));
-  document.getElementById("btnAuth").addEventListener("click", ()=> AUTH_MODE === "signup" ? signUp() : signIn());
-  document.getElementById("btnLogout").addEventListener("click", signOut);
 
+  // auth button
+  document.getElementById("btnAuth").addEventListener("click", ()=> AUTH_MODE === "signup" ? signUp() : signIn());
+
+  // enter to sign in
   document.getElementById("password").addEventListener("keydown", (e)=>{
     if(e.key === "Enter") (AUTH_MODE === "signup" ? signUp() : signIn());
   });
 
+  // app buttons
+  document.getElementById("btnLogout").addEventListener("click", signOut);
+  document.getElementById("btnRefresh").addEventListener("click", reloadAll);
+
+  document.getElementById("btnAddMember").addEventListener("click", addMember);
+  document.getElementById("btnAddContrib").addEventListener("click", addContribution);
+  document.getElementById("btnLoanAction").addEventListener("click", requestLoan);
+  document.getElementById("btnRunPayout").addEventListener("click", runPayout);
+
+  // nav
+  document.querySelectorAll(".nav button[data-sec]").forEach(btn=>{
+    btn.addEventListener("click", ()=>show(btn.dataset.sec));
+  });
+
   setAuthMode("signin");
 
-  // If already signed in, go straight in
+  // restore session
   try{
-    const ok = await enforceAdminGate();
-    if(ok) toast("Session restored");
+    const ok = await enforceGate();
+    if(ok){
+      await reloadAll();
+      toast("Session restored");
+    }
   }catch(e){
-    console.warn("Auto gate check:", e?.message || e);
+    console.warn("Auto gate:", e?.message || e);
   }
 });
 </script>
