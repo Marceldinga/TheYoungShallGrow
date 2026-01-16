@@ -5,26 +5,17 @@ from supabase import create_client
 
 # ============================================================
 # THE YOUNG SHALL GROW — Njangi Dashboard (SINGLE APP)
+# PART 1 / PART 2
 # ------------------------------------------------------------
 # ✅ Supabase Auth login (email/password)
-# ✅ Member: sees ONLY own data (RLS enforced)
-# ✅ Admin: can view ALL / filter member_id; can add/approve/issue/payout via dashboard
-# ✅ Admin data-entry dropdown:
-#    - Add Member (email + phone)
-#    - Add Contribution
-#    - Add Foundation Payment
-#    - Add Fine
-#    - Record Repayment
-#    - Approve Loan (requested -> approved)
-#    - Issue Loan (approved -> active/open)
-#    - Conduct Payout (RPC best-effort)
-# ✅ Member Loan Request:
-#    - Inserts loan as status="requested"
-#    - Select surety from members list
-# ✅ Ports:
-#    - Foundation "Paid (+Repay)" includes repayments.amount_paid
-#    - Loan remaining balance = total_due - sum(repayments.amount_paid) (best-effort)
-# ✅ Clean order: Welcome -> Live updates -> Filters -> Beneficiary -> Ports -> Member request -> Admin -> Tables
+# ✅ Clean organized dropdown sections with short notes
+# ✅ Member: view own data + request loan (status="requested", choose surety)
+# ✅ Admin: (Part 2) add members + all transactions + approve/issue + payout
+#
+# IMPORTANT
+# - Money inputs are forced to INTEGER (prevents 500.0 -> integer error)
+# - Every transaction uses member_id (loans use borrower_member_id)
+# - Admin view ALL depends on your admin RLS policies.
 # ============================================================
 
 # ----------------------------
@@ -79,7 +70,6 @@ st.markdown("""
 .badge span{ color: var(--muted); }
 .small-muted{ color: var(--muted); font-size: 13px; }
 hr{ border: none; border-top: 1px solid var(--stroke); margin: 14px 0; }
-
 .kpi{
   border:1px solid var(--stroke);
   background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
@@ -90,7 +80,6 @@ hr{ border: none; border-top: 1px solid var(--stroke); margin: 14px 0; }
 .kpi .label{ color: var(--muted); font-size: 13px; }
 .kpi .value{ font-size: 26px; font-weight: 800; margin-top: 6px; }
 .kpi .accent{ width:100%; height:4px; border-radius:999px; background: linear-gradient(90deg, var(--brand), var(--brand2)); margin-top: 10px; }
-
 .card{
   border:1px solid var(--stroke);
   background: rgba(255,255,255,.03);
@@ -102,7 +91,7 @@ hr{ border: none; border-top: 1px solid var(--stroke); margin: 14px 0; }
 """, unsafe_allow_html=True)
 
 # ----------------------------
-# SESSION HELPERS
+# HELPERS
 # ----------------------------
 def is_logged_in() -> bool:
     return bool(st.session_state.get("access_token"))
@@ -114,14 +103,23 @@ def logout():
 def attach_jwt(access_token: str):
     supabase.postgrest.auth(access_token)
 
+def safe_sum(df: pd.DataFrame, col: str) -> float:
+    if df.empty or col not in df.columns:
+        return 0.0
+    return float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
+
 def safe_float(x, default=0.0):
     try:
         return float(pd.to_numeric(x, errors="coerce"))
     except Exception:
         return default
 
-# Best-effort: infer existing columns from a sample row (your tables already have data)
+def money_int(label: str, value: int = 0, step: int = 500, min_value: int = 0):
+    # critical: sends integer not float
+    return st.number_input(label, min_value=min_value, value=value, step=step, format="%d")
+
 def get_table_cols(table: str) -> set:
+    # best-effort: infer cols from one row
     try:
         d = supabase.table(table).select("*").limit(1).execute().data or []
         if d:
@@ -132,7 +130,6 @@ def get_table_cols(table: str) -> set:
 
 def filter_payload(payload: dict, cols: set) -> dict:
     if not cols:
-        # If we couldn't infer columns, try sending payload as-is (RLS/DB will decide).
         return payload
     return {k: v for k, v in payload.items() if k in cols}
 
@@ -210,9 +207,9 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-st.write("")
-cA, cB = st.columns([1, 6])
-with cA:
+
+c1, c2 = st.columns([1, 6])
+with c1:
     st.button("Logout", on_click=logout)
 
 st.markdown(
@@ -220,10 +217,10 @@ st.markdown(
     <div class="card">
       <div style="font-size:16px;font-weight:800;margin-bottom:6px">👋 Welcome</div>
       <div class="small-muted">
-        This is a bi-weekly Njangi dashboard. Members can view their own records and request loans.
-        Admin manages the group by adding transactions, approving/issuing loans, recording repayments,
-        and running payouts/rotation. Every transaction is tracked using <b>member_id</b>
-        (loans use <b>borrower_member_id</b>).
+        This is a bi-weekly Njangi dashboard.
+        Members can view their records and request loans.
+        Admin manages all transactions and payouts. Every transaction is linked using <b>member_id</b>.
+        Loans use <b>borrower_member_id</b>.
       </div>
     </div>
     """,
@@ -233,7 +230,7 @@ st.markdown(
 # ----------------------------
 # LIVE UPDATES (dropdown)
 # ----------------------------
-with st.expander("🔽 Live Updates", expanded=False):
+with st.expander("🔽 Live Updates (auto refresh)", expanded=False):
     st.caption("Keeps ports updated when admin adds data, repayments are recorded, or scheduled jobs run.")
     enable_live = st.toggle("Enable auto-refresh", value=True)
     refresh_seconds = st.selectbox("Refresh every (seconds)", [10, 20, 30, 60, 120], index=2)
@@ -242,7 +239,7 @@ with st.expander("🔽 Live Updates", expanded=False):
     if enable_live and st_autorefresh:
         st_autorefresh(interval=int(refresh_seconds) * 1000, key="live_refresh")
     elif enable_live and not st_autorefresh:
-        st.warning("Auto-refresh not installed. Add `streamlit-autorefresh` to requirements.txt on Streamlit Cloud.")
+        st.warning("Add `streamlit-autorefresh` to requirements.txt on Streamlit Cloud to enable auto-refresh.")
 
 # ----------------------------
 # FILTERS (dropdown)
@@ -256,7 +253,7 @@ with st.expander("🔽 Filters", expanded=True):
         admin_member_id = ""
 
     range_opt = f1.selectbox("Time range", ["All time", "Last 30 days", "Last 90 days", "This year"], index=0)
-    search_text = f2.text_input("Quick search", placeholder="e.g. unpaid, paid, pending, late...")
+    search_text = f2.text_input("Quick search", placeholder="e.g. unpaid, paid, pending...")
     record_id = f3.text_input("Record ID", placeholder="e.g. 58")
     show_only_unpaid = f4.checkbox("Only unpaid fines", value=False)
 
@@ -314,11 +311,6 @@ def apply_record_id_filter(df: pd.DataFrame) -> pd.DataFrame:
         return df
     return df[pd.to_numeric(df["id"], errors="coerce") == rid]
 
-def safe_sum(df: pd.DataFrame, col: str) -> float:
-    if df.empty or col not in df.columns:
-        return 0.0
-    return float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
-
 def fetch_df(table: str, cols="*", member_col="member_id", order_col=None, date_col=None) -> pd.DataFrame:
     q = supabase.table(table).select(cols)
     if not (is_admin and viewing_all_members):
@@ -332,7 +324,7 @@ def fetch_df(table: str, cols="*", member_col="member_id", order_col=None, date_
     return df
 
 # ----------------------------
-# LOAD MEMBERS (for admin dropdown + surety dropdown)
+# MEMBERS LIST (for admin & surety dropdowns)
 # ----------------------------
 def load_members_df():
     try:
@@ -347,21 +339,18 @@ def member_label(mid: int, name: str, email: str):
     base = name or email or f"Member {mid}"
     return f"{mid} — {base}"
 
-def build_member_options(df: pd.DataFrame):
+def build_member_labels(df: pd.DataFrame):
     if df.empty or "id" not in df.columns:
-        return {}, []
-    options = {}
+        return []
     labels = []
     for _, r in df.iterrows():
         mid = int(r.get("id"))
         nm = str(r.get("name") or "")
         em = str(r.get("email") or "")
-        lbl = member_label(mid, nm, em)
-        options[lbl] = mid
-        labels.append(lbl)
-    return options, labels
+        labels.append(member_label(mid, nm, em))
+    return labels
 
-member_opts, member_labels = build_member_options(members_df)
+member_labels = build_member_labels(members_df)
 
 # ----------------------------
 # LOAD DATA (tables)
@@ -389,14 +378,15 @@ repay_df = apply_search(repay_df, ["notes", "borrower_name", "member_name"]) if 
 repay_df = apply_record_id_filter(repay_df)
 
 # ----------------------------
-# LOAN BALANCES AFTER REPAYMENTS (best-effort)
+# LOAN BALANCE = total_due - repaid (best-effort)
 # ----------------------------
 def compute_loan_balances(loans: pd.DataFrame, repays: pd.DataFrame) -> pd.DataFrame:
     if loans.empty or "id" not in loans.columns:
         return loans
     out = loans.copy()
+
     if repays.empty or "loan_id" not in repays.columns:
-        out["total_repaid"] = 0.0
+        out["total_repaid"] = 0
         if "total_due" in out.columns:
             out["remaining_balance"] = pd.to_numeric(out["total_due"], errors="coerce").fillna(0)
         return out
@@ -411,6 +401,7 @@ def compute_loan_balances(loans: pd.DataFrame, repays: pd.DataFrame) -> pd.DataF
 
     out = out.merge(r, left_on="id", right_on="loan_id", how="left")
     out["total_repaid"] = pd.to_numeric(out["total_repaid"], errors="coerce").fillna(0)
+
     if "total_due" in out.columns:
         out["total_due"] = pd.to_numeric(out["total_due"], errors="coerce").fillna(0)
         out["remaining_balance"] = out["total_due"] - out["total_repaid"]
@@ -419,78 +410,68 @@ def compute_loan_balances(loans: pd.DataFrame, repays: pd.DataFrame) -> pd.DataF
 loans_df = compute_loan_balances(loans_df, repay_df)
 
 # ----------------------------
-# BENEFICIARY PANELS (best-effort)
+# BENEFICIARY SECTION (best-effort)
 # ----------------------------
-def show_current_beneficiary_box():
+with st.expander("🔽 Beneficiary (Current + Next)", expanded=True):
+    st.caption("Current beneficiary uses table current_cycle_beneficiary. Next beneficiary uses RPC next_beneficiary_totals().")
+
     try:
         cur = supabase.table("current_cycle_beneficiary").select("*").limit(1).execute().data or []
-        if not cur:
-            return
-        c = cur[0]
-        name = c.get("beneficiary_name") or c.get("name") or c.get("member_name") or ""
-        cycle_no = c.get("cycle_no") or c.get("cycle_number") or c.get("cycle") or ""
-        start_date = c.get("cycle_start_date") or c.get("start_date") or c.get("rotation_start_date") or ""
-        payout_date = c.get("payout_date") or c.get("next_payout_date") or ""
-        st.markdown(
-            f"""
-            <div class="card">
-              <div style="font-size:16px;font-weight:800">👤 Current Beneficiary: {name}</div>
-              <div class="small-muted" style="margin-top:8px">🔁 Cycle #{cycle_no}: {start_date}</div>
-              <div class="small-muted" style="margin-top:4px">💰 Payout Date: {payout_date}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        if cur:
+            c = cur[0]
+            name = c.get("beneficiary_name") or c.get("name") or c.get("member_name") or ""
+            cycle_no = c.get("cycle_no") or c.get("cycle_number") or c.get("cycle") or ""
+            start_date = c.get("cycle_start_date") or c.get("start_date") or ""
+            payout_date = c.get("payout_date") or c.get("next_payout_date") or ""
+            st.markdown(
+                f"""
+                <div class="card">
+                  <div style="font-size:16px;font-weight:800">👤 Current Beneficiary: {name}</div>
+                  <div class="small-muted" style="margin-top:8px">🔁 Cycle #{cycle_no}: {start_date}</div>
+                  <div class="small-muted" style="margin-top:4px">💰 Payout Date: {payout_date}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.info("No current beneficiary record found.")
     except Exception:
-        pass
+        st.info("Current beneficiary table not accessible (missing or RLS).")
 
-def show_next_beneficiary_port_for_all():
     try:
         res = supabase.rpc("next_beneficiary_totals", {}).execute()
         rows = res.data or []
-        if not rows:
-            return
-        r = rows[0]
-        nm = r.get("next_member_name", "")
-        mid = r.get("next_member_id", "")
-        tc = safe_float(r.get("total_contribution", 0) or 0)
-        tfp = safe_float(r.get("total_foundation_paid", 0) or 0)
-        tfn = safe_float(r.get("total_foundation_pending", 0) or 0)
-        tl = safe_float(r.get("total_loan", 0) or 0)
-
-        st.markdown(
-            f"""
-            <div class="card" style="margin-top:12px">
-              <div style="font-size:16px;font-weight:800">➡️ Next Beneficiary After Payout</div>
-              <div class="small-muted" style="margin-top:6px">{nm} (member_id {mid})</div>
-              <div style="margin-top:10px">
-                <div>• <b>Total Contribution:</b> {tc:,.2f}</div>
-                <div>• <b>Total Foundation (Paid):</b> {tfp:,.2f}</div>
-                <div>• <b>Total Foundation (Pending):</b> {tfn:,.2f}</div>
-                <div>• <b>Total Loan:</b> {tl:,.2f}</div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        if rows:
+            r = rows[0]
+            st.markdown(
+                f"""
+                <div class="card" style="margin-top:12px">
+                  <div style="font-size:16px;font-weight:800">➡️ Next Beneficiary After Payout</div>
+                  <div class="small-muted" style="margin-top:6px">{r.get("next_member_name","")} (member_id {r.get("next_member_id","")})</div>
+                  <div style="margin-top:10px">
+                    <div>• <b>Total Contribution:</b> {safe_float(r.get("total_contribution",0)):,.2f}</div>
+                    <div>• <b>Total Foundation (Paid):</b> {safe_float(r.get("total_foundation_paid",0)):,.2f}</div>
+                    <div>• <b>Total Foundation (Pending):</b> {safe_float(r.get("total_foundation_pending",0)):,.2f}</div>
+                    <div>• <b>Total Loan:</b> {safe_float(r.get("total_loan",0)):,.2f}</div>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.info("Next beneficiary totals RPC returned no rows (or not created yet).")
     except Exception:
-        pass
-
-with st.expander("🔽 Beneficiary (Current + Next)", expanded=True):
-    show_current_beneficiary_box()
-    show_next_beneficiary_port_for_all()
+        st.info("RPC next_beneficiary_totals() not available (create it if you want this port).")
 
 # ----------------------------
-# PORTS / KPIs
+# PORTS / TOTALS (auto update)
 # ----------------------------
 total_contrib = safe_sum(contrib_df, "amount")
-
 found_paid_only = safe_sum(found_df, "amount_paid")
 found_pending = safe_sum(found_df, "amount_pending")
 
 rep_col = "amount_paid" if "amount_paid" in repay_df.columns else ("amount" if "amount" in repay_df.columns else None)
 total_repaid = safe_sum(repay_df, rep_col) if rep_col else 0.0
-
 total_found_paid_plus_repaid = found_paid_only + total_repaid
 
 unpaid_fines_amt = 0.0
@@ -519,6 +500,7 @@ if is_admin and (not loans_df.empty) and ("total_interest_generated" in loans_df
     total_interest_generated = safe_sum(loans_df, "total_interest_generated")
 
 with st.expander("🔽 Summary Ports (Totals)", expanded=True):
+    st.caption("Totals update after admin inserts, repayments, loan approvals, or interest jobs (refresh/auto-refresh).")
     if is_admin:
         k1, k2, k3, k4, k5, k6, k7 = st.columns(7)
     else:
@@ -530,48 +512,39 @@ with st.expander("🔽 Summary Ports (Totals)", expanded=True):
     k4.markdown(f"<div class='kpi'><div class='label'>Unpaid Fines</div><div class='value'>{unpaid_fines_amt:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
     k5.markdown(f"<div class='kpi'><div class='label'>Active Loans</div><div class='value'>{active_loans}</div><div class='accent'></div></div>", unsafe_allow_html=True)
     k6.markdown(f"<div class='kpi'><div class='label'>Loan Total</div><div class='value'>{loan_total:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
-
     if is_admin:
         k7.markdown(f"<div class='kpi'><div class='label'>Total Interest (Admin)</div><div class='value'>{total_interest_generated:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
 
 st.markdown("<hr/>", unsafe_allow_html=True)
 
 # ============================================================
-# MEMBER LOAN REQUEST (dropdown)
-# - Inserts into loans as status="requested"
-# - Uses surety selection
-# - Uses member_id for borrower_member_id
+# MEMBER: REQUEST LOAN (status=requested) + surety selection
 # ============================================================
-with st.expander("🔽 Member: Request Loan (how it works)", expanded=not is_admin):
-    st.markdown(
-        "<div class='small-muted'>"
-        "Members request a loan here. You choose a surety from the member list. "
-        "Your request is saved with status <b>requested</b>. Admin later approves and issues it."
-        "</div>",
-        unsafe_allow_html=True
-    )
+with st.expander("🔽 Member: Request Loan", expanded=not is_admin):
+    st.caption("This inserts into loans with status='requested'. You must select a surety.")
 
     surety_labels = [lbl for lbl in member_labels if not lbl.startswith(f"{my_member_id} —")]
-    surety_pick = st.selectbox("Select Surety", surety_labels) if surety_labels else None
+    surety_pick = st.selectbox("Select Surety (member_id — name/email)", surety_labels) if surety_labels else None
 
     with st.form("member_loan_request_form", clear_on_submit=False):
-        req_amount = st.number_input("Requested Amount", min_value=0.0, step=100.0, value=0.0)
+        req_amount = money_int("Requested Amount", value=0, step=500)
         notes = st.text_input("Notes (optional)")
         submit_req = st.form_submit_button("Submit Loan Request")
 
     if submit_req:
         try:
-            surety_member_id = None
-            surety_name = None
-            if surety_pick:
-                surety_member_id = int(surety_pick.split("—")[0].strip())
-                surety_name = surety_pick.split("—", 1)[1].strip()
+            if not surety_pick:
+                st.error("Please select a surety.")
+                st.stop()
+
+            surety_member_id = int(surety_pick.split("—")[0].strip())
+            surety_name = surety_pick.split("—", 1)[1].strip()
 
             loans_cols = get_table_cols("loans")
             payload = {
                 "borrower_member_id": my_member_id,
                 "borrower_name": my_member.get("name") or user_email,
-                "principal": float(req_amount),
+                "principal": int(req_amount),
                 "status": "requested",
                 "surety_member_id": surety_member_id,
                 "surety_name": surety_name,
@@ -583,53 +556,79 @@ with st.expander("🔽 Member: Request Loan (how it works)", expanded=not is_adm
             st.success("✅ Loan request submitted. Please wait for admin approval.")
             st.rerun()
         except Exception as e:
-            st.error(f"❌ Could not submit loan request (RLS or schema mismatch). Details:\n{e}")
+            st.error(f"❌ Could not submit loan request. Details:\n{e}")
+
+# ------------------------------------------------------------
+# PART 2 CONTINUES BELOW (Admin Control Panel + View Tables)
+# ------------------------------------------------------------
+
+# ============================================================
+# PART 2 — ADMIN CONTROL PANEL + VIEW TABLES
+# (Continuation of Part 1)
+# ============================================================
 
 # ============================================================
 # ADMIN CONTROL PANEL (dropdown)
 # ============================================================
 if is_admin:
-    with st.expander("🔽 Admin: Control Panel (what each dropdown does)", expanded=True):
+    with st.expander("🔽 Admin Control Panel (Manage All Njangi Operations)", expanded=True):
+
         st.markdown(
-            "<div class='small-muted'>"
-            "<b>Add Member</b>: creates a member row (email + phone). "
-            "<b>Add Contribution/Foundation/Fine/Repayment</b>: inserts a transaction using <b>member_id</b>. "
-            "<b>Approve/Issue Loan</b>: updates loan status. "
-            "<b>Conduct Payout</b>: runs payout rotation via RPC (if you created it)."
-            "</div>",
+            """
+            <div class="small-muted">
+            <b>This panel is for administrators only.</b><br><br>
+
+            • Add Member → creates a new member (email + phone)<br>
+            • Add Contribution → records member contribution<br>
+            • Add Foundation Payment → records foundation payment<br>
+            • Add Fine → records member fine<br>
+            • Record Repayment → records loan repayment<br>
+            • Approve Loan → requested → approved<br>
+            • Issue Loan → approved → active/open<br>
+            • Conduct Payout → rotates beneficiary using RPC<br><br>
+
+            All transactions are saved using <b>member_id</b>.
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
+        # ----------------------------
+        # Admin action selector
+        # ----------------------------
         action = st.selectbox(
-            "Admin Action",
+            "Select Admin Action",
             [
-                "Add Member (email + phone)",
+                "Add Member",
                 "Add Contribution",
                 "Add Foundation Payment",
                 "Add Fine",
                 "Record Repayment",
-                "Approve Loan (requested → approved)",
-                "Issue Loan (approved → active/open)",
-                "Conduct Payout (RPC)",
-            ],
-            index=0
+                "Approve Loan",
+                "Issue Loan",
+                "Conduct Payout",
+            ]
         )
 
-        # Shared member picker (for all transactions)
-        if not member_labels:
-            st.warning("No members found in members table. Add members first.")
+        # ----------------------------
+        # Member selector (for all actions)
+        # ----------------------------
+        if members_df.empty:
+            st.warning("No members found. Please add members first.")
             target_member_id = None
             target_member_name = ""
         else:
-            target_label = st.selectbox("Target Member", member_labels)
+            target_label = st.selectbox("Select Member (member_id — name/email)", member_labels)
             target_member_id = int(target_label.split("—")[0].strip())
             target_member_name = target_label.split("—", 1)[1].strip()
 
-        # 1) Add Member
-        if action == "Add Member (email + phone)":
-            st.subheader("Add Member")
-            st.caption("This inserts into public.members. NOTE: It does NOT create a Supabase Auth user.")
-            with st.form("admin_add_member_form", clear_on_submit=True):
+        # ====================================================
+        # 1) ADD MEMBER
+        # ====================================================
+        if action == "Add Member":
+            st.subheader("➕ Add Member (email + phone)")
+
+            with st.form("add_member_form"):
                 email = st.text_input("Email").strip().lower()
                 phone = st.text_input("Phone").strip()
                 name = st.text_input("Name (optional)").strip()
@@ -640,169 +639,189 @@ if is_admin:
                     if not email or not phone:
                         st.error("Email and phone are required.")
                     else:
-                        members_cols = get_table_cols("members")
-                        payload = {"email": email, "phone": phone, "name": name if name else email.split("@")[0].title()}
-                        payload = filter_payload(payload, members_cols)
-
-                        # best-effort duplicate check by email
-                        existing = supabase.table("members").select("id").eq("email", email).limit(1).execute().data
-                        if existing:
-                            st.warning(f"Member already exists: member_id = {existing[0]['id']}")
-                        else:
-                            supabase.table("members").insert(payload).execute()
-                            st.success("✅ Member created.")
-                            st.rerun()
+                        payload = {
+                            "email": email,
+                            "phone": phone,
+                            "name": name if name else email.split("@")[0].title(),
+                        }
+                        payload = filter_payload(payload, get_table_cols("members"))
+                        supabase.table("members").insert(payload).execute()
+                        st.success("✅ Member created successfully.")
+                        st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Could not create member (RLS may block INSERT). Details:\n{e}")
+                    st.error(f"❌ Failed to create member: {e}")
 
-        # 2) Add Contribution
+        # ====================================================
+        # 2) ADD CONTRIBUTION
+        # ====================================================
         elif action == "Add Contribution":
-            st.subheader("Add Contribution")
-            with st.form("admin_add_contribution_form", clear_on_submit=True):
-                amount = st.number_input("Amount", min_value=0.0, step=50.0, value=0.0)
-                kind = st.text_input("Kind (optional)", value="bi-weekly")
-                notes = st.text_input("Notes (optional)")
+            st.subheader("➕ Add Contribution")
+
+            with st.form("add_contribution_form"):
+                amount = money_int("Amount", step=500)
+                kind = st.text_input("Kind", value="bi-weekly")
                 submit = st.form_submit_button("Save Contribution")
 
             if submit and target_member_id:
                 try:
-                    cols = get_table_cols("contributions")
-                    payload = {"member_id": int(target_member_id), "amount": float(amount), "kind": kind, "notes": notes or None}
-                    payload = filter_payload(payload, cols)
+                    payload = {
+                        "member_id": int(target_member_id),
+                        "amount": int(amount),
+                        "kind": kind,
+                    }
+                    payload = filter_payload(payload, get_table_cols("contributions"))
                     supabase.table("contributions").insert(payload).execute()
                     st.success("✅ Contribution saved.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Insert failed (RLS may block). Details:\n{e}")
+                    st.error(f"❌ Failed to save contribution: {e}")
 
-        # 3) Add Foundation Payment
+        # ====================================================
+        # 3) ADD FOUNDATION PAYMENT
+        # ====================================================
         elif action == "Add Foundation Payment":
-            st.subheader("Add Foundation Payment")
-            with st.form("admin_add_found_form", clear_on_submit=True):
-                paid = st.number_input("Amount Paid", min_value=0.0, step=50.0, value=0.0)
-                pending = st.number_input("Amount Pending", min_value=0.0, step=50.0, value=0.0)
-                status = st.selectbox("Status", ["paid", "pending", "partial"], index=2)
+            st.subheader("➕ Add Foundation Payment")
+
+            with st.form("add_foundation_form"):
+                paid = money_int("Amount Paid", step=500)
+                pending = money_int("Amount Pending", step=500)
+                status = st.selectbox("Status", ["paid", "pending", "partial"])
                 date_paid = st.date_input("Date Paid")
-                notes = st.text_input("Notes (optional)")
                 submit = st.form_submit_button("Save Foundation Payment")
 
             if submit and target_member_id:
                 try:
-                    cols = get_table_cols("foundation_payments")
                     payload = {
                         "member_id": int(target_member_id),
-                        "amount_paid": float(paid),
-                        "amount_pending": float(pending),
+                        "amount_paid": int(paid),
+                        "amount_pending": int(pending),
                         "status": status,
                         "date_paid": str(date_paid),
-                        "notes": notes or None
                     }
-                    payload = filter_payload(payload, cols)
+                    payload = filter_payload(payload, get_table_cols("foundation_payments"))
                     supabase.table("foundation_payments").insert(payload).execute()
                     st.success("✅ Foundation payment saved.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Insert failed (RLS may block). Details:\n{e}")
+                    st.error(f"❌ Failed to save foundation payment: {e}")
 
-        # 4) Add Fine
+        # ====================================================
+        # 4) ADD FINE
+        # ====================================================
         elif action == "Add Fine":
-            st.subheader("Add Fine")
-            with st.form("admin_add_fine_form", clear_on_submit=True):
-                amount = st.number_input("Amount", min_value=0.0, step=10.0, value=0.0)
+            st.subheader("➕ Add Fine")
+
+            with st.form("add_fine_form"):
+                amount = money_int("Fine Amount", step=100)
                 reason = st.text_input("Reason", value="Late payment")
-                status = st.selectbox("Status", ["unpaid", "paid"], index=0)
+                status = st.selectbox("Status", ["unpaid", "paid"])
                 submit = st.form_submit_button("Save Fine")
 
             if submit and target_member_id:
                 try:
-                    cols = get_table_cols("fines")
-                    payload = {"member_id": int(target_member_id), "amount": float(amount), "reason": reason, "status": status}
-                    payload = filter_payload(payload, cols)
+                    payload = {
+                        "member_id": int(target_member_id),
+                        "amount": int(amount),
+                        "reason": reason,
+                        "status": status,
+                    }
+                    payload = filter_payload(payload, get_table_cols("fines"))
                     supabase.table("fines").insert(payload).execute()
                     st.success("✅ Fine saved.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Insert failed (RLS may block). Details:\n{e}")
+                    st.error(f"❌ Failed to save fine: {e}")
 
-        # 5) Record Repayment
+        # ====================================================
+        # 5) RECORD REPAYMENT
+        # ====================================================
         elif action == "Record Repayment":
-            st.subheader("Record Repayment")
-            with st.form("admin_add_repay_form", clear_on_submit=True):
-                loan_id = st.text_input("Loan ID (optional)", placeholder="e.g. 12")
-                amount_paid = st.number_input("Amount Paid", min_value=0.0, step=50.0, value=0.0)
+            st.subheader("➕ Record Repayment")
+
+            with st.form("add_repayment_form"):
+                loan_id = st.number_input("Loan ID", min_value=1, step=1)
+                amount_paid = money_int("Amount Paid", step=500)
                 paid_at = st.date_input("Paid Date")
-                notes = st.text_input("Notes (optional)")
                 submit = st.form_submit_button("Save Repayment")
 
             if submit and target_member_id:
                 try:
-                    cols = get_table_cols("repayments")
                     payload = {
                         "member_id": int(target_member_id),
-                        "member_name": target_member_name,
-                        "borrower_member_id": int(target_member_id),
-                        "borrower_name": target_member_name,
-                        "amount_paid": float(amount_paid),
-                        "amount": float(amount_paid),
+                        "loan_id": int(loan_id),
+                        "amount_paid": int(amount_paid),
                         "paid_at": str(paid_at),
-                        "notes": notes or None,
                     }
-                    if loan_id.strip():
-                        payload["loan_id"] = int(loan_id.strip())
-
-                    payload = filter_payload(payload, cols)
+                    payload = filter_payload(payload, get_table_cols("repayments"))
                     supabase.table("repayments").insert(payload).execute()
-                    st.success("✅ Repayment saved.")
+                    st.success("✅ Repayment recorded.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Insert failed (RLS may block). Details:\n{e}")
+                    st.error(f"❌ Failed to record repayment: {e}")
 
-        # 6) Approve Loan
-        elif action == "Approve Loan (requested → approved)":
-            st.subheader("Approve Loan")
-            st.caption("Enter the loan ID you want to approve.")
-            loan_id = st.number_input("Loan ID", min_value=1, step=1, value=1)
-            if st.button("✅ Approve"):
+        # ====================================================
+        # 6) APPROVE LOAN
+        # ====================================================
+        elif action == "Approve Loan":
+            st.subheader("✅ Approve Loan (requested → approved)")
+
+            loan_id = st.number_input("Loan ID", min_value=1, step=1)
+            if st.button("Approve Loan"):
                 try:
                     supabase.table("loans").update({"status": "approved"}).eq("id", int(loan_id)).execute()
                     st.success("✅ Loan approved.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Update failed (RLS may block). Details:\n{e}")
+                    st.error(f"❌ Failed to approve loan: {e}")
 
-        # 7) Issue Loan
-        elif action == "Issue Loan (approved → active/open)":
-            st.subheader("Issue Loan")
-            st.caption("Enter the loan ID you want to issue (make active/open).")
-            loan_id = st.number_input("Loan ID", min_value=1, step=1, value=1)
-            new_status = st.selectbox("Set status to", ["active", "open", "ongoing"], index=0)
-            if st.button("🚀 Issue"):
+        # ====================================================
+        # 7) ISSUE LOAN
+        # ====================================================
+        elif action == "Issue Loan":
+            st.subheader("🚀 Issue Loan (approved → active)")
+
+            loan_id = st.number_input("Loan ID", min_value=1, step=1)
+            if st.button("Issue Loan"):
                 try:
-                    supabase.table("loans").update({"status": new_status}).eq("id", int(loan_id)).execute()
-                    st.success("✅ Loan issued.")
+                    supabase.table("loans").update({"status": "active"}).eq("id", int(loan_id)).execute()
+                    st.success("✅ Loan issued (now active).")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Update failed (RLS may block). Details:\n{e}")
+                    st.error(f"❌ Failed to issue loan: {e}")
 
-        # 8) Conduct Payout (RPC)
-        elif action == "Conduct Payout (RPC)":
-            st.subheader("Conduct Payout (RPC)")
-            st.caption("This calls your payout RPC: record_payout_and_rotate_next(). If your RPC name differs, change it here.")
-            if st.button("💰 Execute Payout & Rotate"):
+        # ====================================================
+        # 8) CONDUCT PAYOUT
+        # ====================================================
+        elif action == "Conduct Payout":
+            st.subheader("💰 Conduct Payout & Rotate Beneficiary")
+            st.caption("Calls RPC: record_payout_and_rotate_next()")
+
+            if st.button("Execute Payout"):
                 try:
                     supabase.rpc("record_payout_and_rotate_next", {}).execute()
-                    st.success("✅ Payout executed & beneficiary rotated.")
+                    st.success("✅ Payout executed & next beneficiary rotated.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ RPC failed (function missing/params/RLS). Details:\n{e}")
+                    st.error(f"❌ Payout failed: {e}")
 
 # ============================================================
 # VIEW TABLES (dropdown)
 # ============================================================
 with st.expander("🔽 View Tables", expanded=True):
+
+    st.caption("Browse all Njangi tables. Admin can view all members (if RLS allows). Members see only their own data.")
+
     table_page = st.selectbox(
         "Select Table",
-        ["My Profile", "Members", "Contributions", "Foundation Payments", "Loans", "Repayments", "Fines"],
+        [
+            "My Profile",
+            "Members",
+            "Contributions",
+            "Foundation Payments",
+            "Loans",
+            "Repayments",
+            "Fines",
+        ],
         index=0
     )
 
@@ -812,10 +831,7 @@ with st.expander("🔽 View Tables", expanded=True):
 
     elif table_page == "Members":
         st.subheader("Members")
-        if members_df.empty:
-            st.info("No members found.")
-        else:
-            st.dataframe(members_df, use_container_width=True, hide_index=True)
+        st.dataframe(members_df, use_container_width=True, hide_index=True)
 
     elif table_page == "Contributions":
         st.subheader("Contributions")
@@ -823,26 +839,11 @@ with st.expander("🔽 View Tables", expanded=True):
 
     elif table_page == "Foundation Payments":
         st.subheader("Foundation Payments")
-        st.markdown(
-            f"<div class='small-muted'>Paid (table): <b>{found_paid_only:,.2f}</b> • "
-            f"Repayments: <b>{total_repaid:,.2f}</b> • Pending: <b>{found_pending:,.2f}</b></div>",
-            unsafe_allow_html=True
-        )
         st.dataframe(found_df, use_container_width=True, hide_index=True)
 
     elif table_page == "Loans":
         st.subheader("Loans")
-        if loans_df.empty:
-            st.info("No loans found.")
-        else:
-            preferred = [
-                "id", "borrower_member_id", "borrower_name", "surety_member_id", "surety_name",
-                "principal", "principal_current", "interest", "total_due", "balance",
-                "total_repaid", "remaining_balance",
-                "status", "borrow_date", "issued_at", "created_at", "updated_at"
-            ]
-            cols = [c for c in preferred if c in loans_df.columns] + [c for c in loans_df.columns if c not in preferred]
-            st.dataframe(loans_df[cols], use_container_width=True, hide_index=True)
+        st.dataframe(loans_df, use_container_width=True, hide_index=True)
 
     elif table_page == "Repayments":
         st.subheader("Repayments")
@@ -852,8 +853,11 @@ with st.expander("🔽 View Tables", expanded=True):
         st.subheader("Fines")
         st.dataframe(fines_df, use_container_width=True, hide_index=True)
 
+# ----------------------------
+# FOOTER NOTE
+# ----------------------------
 st.markdown("<hr/>", unsafe_allow_html=True)
 if not is_admin:
-    st.caption("Member access: you can only view your own data (email → member_id). Admin actions are hidden.")
+    st.caption("Member access: you can only view your own data (email → member_id).")
 else:
-    st.caption("Admin access: use Admin Control Panel to add/approve/issue/payout. Viewing ALL members requires admin RLS policies.")
+    st.caption("Admin access: use Admin Control Panel to manage all Njangi operations.")
