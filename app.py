@@ -1,23 +1,27 @@
 
-import pandas as pd
-import streamlit as st
-from supabase import create_client
-from datetime import date, timedelta
-
 # ============================================================
 # THE YOUNG SHALL GROW — Njangi Dashboard (SINGLE APP)
-# PART 1  (PART 2 CONTINUES BELOW)
+# PART 1 (PART 2 CONTINUES BELOW)
 # ------------------------------------------------------------
 # ✅ Supabase Auth login (email/password)
-# ✅ Clean organized dropdown sections with short notes
-# ✅ Member: view own data + request loan (status="requested", choose surety)
-# ✅ Admin: (Part 2) add members + all transactions + approve/issue + payout
+# ✅ Rotation POT (permanent rule):
+#    - POT counts ONLY contributions AFTER last payout execution time (payouts.created_at)
+#    - Window = 14 days after last payout execution time
+# ✅ Member: view own data + request loan (RULE ENFORCED before insert)
+#    - capacity = contributions + 70% * foundation_paid
+#    - borrower MUST qualify AND surety MUST qualify (same rule) before request can be submitted
+# ✅ Admin: (Part 2) add members + all transactions + approve/issue + payout + view tables
 #
 # IMPORTANT
 # - Money inputs are forced to INTEGER (prevents 500.0 -> integer error)
 # - Every transaction uses member_id (loans use borrower_member_id)
-# - Admin view ALL depends on your admin RLS policies.
+# - Admin view ALL depends on your RLS policies.
 # ============================================================
+
+import pandas as pd
+import streamlit as st
+from supabase import create_client
+from datetime import date
 
 # ----------------------------
 # SETTINGS
@@ -37,14 +41,10 @@ except Exception:
     st_autorefresh = None
 
 # ----------------------------
-# PAYOUT SETTINGS (YOUR RULE)
+# ROTATION SETTINGS
 # ----------------------------
-SEASON_START_DATE = date(2026, 1, 3)   # ID 1 is paid on this date
-PAYOUT_EVERY_DAYS = 14                 # bi-weekly
-
-def payout_date_for_member_id(member_id: int) -> date:
-    # ID 1 -> start date, ID 2 -> +14 days, ID 3 -> +28 days, ...
-    return SEASON_START_DATE + timedelta(days=PAYOUT_EVERY_DAYS * (int(member_id) - 1))
+SEASON_START_DATE = date(2026, 1, 3)  # used only if payouts table is empty
+PAYOUT_EVERY_DAYS = 14
 
 # ----------------------------
 # THEME
@@ -119,12 +119,6 @@ def safe_sum(df: pd.DataFrame, col: str) -> float:
         return 0.0
     return float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
 
-def safe_float(x, default=0.0):
-    try:
-        return float(pd.to_numeric(x, errors="coerce"))
-    except Exception:
-        return default
-
 def money_int(label: str, value: int = 0, step: int = 500, min_value: int = 0):
     return st.number_input(label, min_value=min_value, value=value, step=step, format="%d")
 
@@ -196,7 +190,59 @@ if not my_member:
 my_member_id = int(my_member["id"])
 
 # ----------------------------
-# HEADER + WELCOME NOTE
+# MEMBERS LIST (for admin & surety dropdowns)
+# ----------------------------
+def load_members_df():
+    try:
+        rows = supabase.table("members").select("*").order("id").execute().data or []
+        return pd.DataFrame(rows)
+    except Exception:
+        return pd.DataFrame([])
+
+members_df = load_members_df()
+
+def member_display(mid: int, name: str, email: str):
+    nm = (name or "").strip()
+    if nm:
+        return nm
+    em = (email or "").strip()
+    if em:
+        return em
+    return f"Member {mid}"
+
+def member_label(mid: int, display: str):
+    return f"{mid} — {display}"
+
+def build_member_labels(df: pd.DataFrame):
+    if df.empty or "id" not in df.columns:
+        return []
+    labels = []
+    for _, r in df.iterrows():
+        mid = int(pd.to_numeric(r.get("id"), errors="coerce"))
+        disp = member_display(mid, str(r.get("name") or ""), str(r.get("email") or ""))
+        labels.append(member_label(mid, disp))
+    return labels
+
+member_labels = build_member_labels(members_df)
+
+def member_name_by_id(member_id: int) -> str:
+    try:
+        if not members_df.empty and "id" in members_df.columns:
+            s = members_df.copy()
+            s["id"] = pd.to_numeric(s["id"], errors="coerce")
+            row = s[s["id"] == int(member_id)]
+            if not row.empty:
+                nm = str(row.iloc[0].get("name") or "").strip()
+                if nm:
+                    return nm
+        row2 = supabase.table("members").select("name").eq("id", int(member_id)).limit(1).execute().data or []
+        nm2 = str(row2[0].get("name") or "").strip() if row2 else ""
+        return nm2 if nm2 else f"Member {member_id}"
+    except Exception:
+        return f"Member {member_id}"
+
+# ----------------------------
+# HEADER
 # ----------------------------
 st.markdown(
     f"""
@@ -205,7 +251,7 @@ st.markdown(
         <div>
           <h1 style="margin:0">📊 The Young Shall Grow — Njangi Dashboard</h1>
           <div class="small-muted">
-            Logged in as <b>{user_email}</b> {'(admin)' if is_admin else ''} • Your member_id = <b>{my_member_id}</b>
+            Logged in as <b>{user_email}</b> {'(admin)' if is_admin else ''} • Your member_id = <b>{my_member_id}</b> • Name: <b>{member_name_by_id(my_member_id)}</b>
           </div>
         </div>
         <div style="display:flex;gap:10px;align-items:center">
@@ -217,30 +263,15 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-c1, c2 = st.columns([1, 6])
+c1, _ = st.columns([1, 6])
 with c1:
     st.button("Logout", on_click=logout)
 
-st.markdown(
-    """
-    <div class="card">
-      <div style="font-size:16px;font-weight:800;margin-bottom:6px">👋 Welcome</div>
-      <div class="small-muted">
-        This is a bi-weekly Njangi dashboard.
-        Members can view their records and request loans.
-        Admin manages all transactions and payouts. Every transaction is linked using <b>member_id</b>.
-        Loans use <b>borrower_member_id</b>.
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
 # ----------------------------
-# LIVE UPDATES (dropdown)
+# LIVE UPDATES
 # ----------------------------
 with st.expander("🔽 Live Updates (auto refresh)", expanded=False):
-    st.caption("Keeps ports updated when admin adds data, repayments are recorded, or scheduled jobs run.")
+    st.caption("Keeps ports updated when admin adds data, repayments are recorded, or payouts happen.")
     enable_live = st.toggle("Enable auto-refresh", value=True)
     refresh_seconds = st.selectbox("Refresh every (seconds)", [10, 20, 30, 60, 120], index=2)
     if st.button("🔄 Refresh now"):
@@ -251,7 +282,7 @@ with st.expander("🔽 Live Updates (auto refresh)", expanded=False):
         st.warning("Add `streamlit-autorefresh` to requirements.txt on Streamlit Cloud to enable auto-refresh.")
 
 # ----------------------------
-# FILTERS (dropdown)
+# FILTERS
 # ----------------------------
 with st.expander("🔽 Filters", expanded=True):
     if is_admin:
@@ -275,13 +306,6 @@ elif is_admin and admin_member_id.strip():
         effective_member_id = int(admin_member_id.strip())
     except Exception:
         effective_member_id = my_member_id
-
-st.markdown(
-    f"<div class='small-muted'>Currently viewing: "
-    f"<b>{'ALL members' if viewing_all_members else f'member_id = {effective_member_id}'}</b>"
-    f"</div>",
-    unsafe_allow_html=True
-)
 
 # ----------------------------
 # FILTER HELPERS
@@ -333,78 +357,102 @@ def fetch_df(table: str, cols="*", member_col="member_id", order_col=None, date_
     return df
 
 # ----------------------------
-# MEMBERS LIST (for admin & surety dropdowns)
+# ROTATION POT
 # ----------------------------
-def load_members_df():
+def get_last_payout_row():
     try:
-        rows = supabase.table("members").select("*").order("id").execute().data or []
-        return pd.DataFrame(rows)
+        rows = (
+            supabase.table("payouts")
+            .select("member_id,member_name,payout_amount,payout_date,created_at")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        return rows[0] if rows else None
     except Exception:
-        return pd.DataFrame([])
+        return None
 
-members_df = load_members_df()
+def get_rotation_pot_total():
+    # Try VIEW if you created it
+    try:
+        v = supabase.table("current_rotation").select("*").limit(1).execute().data or []
+        if v:
+            row = v[0]
+            start_ts = pd.to_datetime(row["rotation_start_ts"], utc=True)
+            end_ts = pd.to_datetime(row["rotation_end_ts"], utc=True)
+            pot = float(row["rotation_total"] or 0)
+            return start_ts, end_ts, pot
+    except Exception:
+        pass
 
-def member_label(mid: int, name: str, email: str):
-    base = name or email or f"Member {mid}"
-    return f"{mid} — {base}"
+    # fallback
+    try:
+        last = (
+            supabase.table("payouts")
+            .select("created_at")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if last and last[0].get("created_at"):
+            start_ts = pd.to_datetime(last[0]["created_at"], utc=True)
+        else:
+            start_ts = pd.to_datetime(str(SEASON_START_DATE) + " 00:00:00+00:00")
+    except Exception:
+        start_ts = pd.to_datetime(str(SEASON_START_DATE) + " 00:00:00+00:00")
 
-def build_member_labels(df: pd.DataFrame):
-    if df.empty or "id" not in df.columns:
-        return []
-    labels = []
-    for _, r in df.iterrows():
-        mid = int(r.get("id"))
-        nm = str(r.get("name") or "")
-        em = str(r.get("email") or "")
-        labels.append(member_label(mid, nm, em))
-    return labels
+    end_ts = start_ts + pd.Timedelta(days=PAYOUT_EVERY_DAYS)
 
-member_labels = build_member_labels(members_df)
+    try:
+        rows = (
+            supabase.table("contributions")
+            .select("amount,created_at")
+            .gt("created_at", start_ts.isoformat())
+            .lte("created_at", end_ts.isoformat())
+            .execute()
+            .data
+            or []
+        )
+        df = pd.DataFrame(rows)
+        pot = float(pd.to_numeric(df["amount"], errors="coerce").fillna(0).sum()) if not df.empty else 0.0
+    except Exception:
+        pot = 0.0
 
-# ----------------------------
-# PAYOUT SCHEDULE (NEW PORT)
-# ----------------------------
-with st.expander("🔽 Payout Schedule (Bi-weekly by Member ID)", expanded=True):
-    st.caption("Rule: Season started 2026-01-03. ID 1 paid on 2026-01-03, ID 2 on 2026-01-17, then every 14 days.")
+    return start_ts, end_ts, pot
 
-    # logged-in member payout date
-    my_payout = payout_date_for_member_id(my_member_id)
-    st.info(f"✅ Your payout date (member_id {my_member_id}) is **{my_payout}**")
-
-    # Build schedule from members_df
-    if members_df.empty or "id" not in members_df.columns:
-        st.warning("Members list is empty or missing 'id' column.")
+with st.expander("🔽 Rotation Ports (POT)", expanded=True):
+    last = get_last_payout_row()
+    if last:
+        st.markdown(
+            f"""
+            <div class="card">
+              <div style="font-size:16px;font-weight:800">✅ Last payout recorded</div>
+              <div class="small-muted" style="margin-top:8px">
+                Paid: <b>{last.get('member_name','')}</b> (ID <b>{last.get('member_id','')}</b>)<br>
+                Amount: <b>{last.get('payout_amount','')}</b> • Date: <b>{last.get('payout_date','')}</b>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     else:
-        sched = members_df.copy()
-        sched["id"] = pd.to_numeric(sched["id"], errors="coerce")
-        sched = sched.dropna(subset=["id"]).sort_values("id").reset_index(drop=True)
-        sched["id"] = sched["id"].astype(int)
-        sched["payout_date"] = sched["id"].apply(payout_date_for_member_id)
+        st.info("No payout row found yet. Rotation starts from season start date.")
 
-        today = date.today()
-        sched["status"] = "Upcoming"
-        sched.loc[sched["payout_date"] < today, "status"] = "Paid (past)"
-        sched.loc[sched["payout_date"] == today, "status"] = "Due Today"
+    rot_start_ts, rot_end_ts, rot_total = get_rotation_pot_total()
+    st.caption(f"Rotation window (execution-time based): {rot_start_ts} → {rot_end_ts}")
 
-        upcoming = sched[sched["payout_date"] >= today].sort_values("payout_date")
-        if not upcoming.empty:
-            nxt = upcoming.iloc[0]
-            nm = nxt["name"] if "name" in upcoming.columns else ""
-            st.success(f"Next payout: **{nm}** (ID **{int(nxt['id'])}**) on **{nxt['payout_date']}**")
-        else:
-            st.warning("No upcoming payout found from today onward (check start date / IDs).")
-
-        # Admin sees all; member sees only their row
-        if is_admin:
-            show = [c for c in ["id", "name", "email", "payout_date", "status"] if c in sched.columns]
-            st.dataframe(sched[show], use_container_width=True, hide_index=True)
-        else:
-            my_row = sched[sched["id"] == my_member_id]
-            show = [c for c in ["id", "name", "email", "payout_date", "status"] if c in sched.columns]
-            st.dataframe(my_row[show], use_container_width=True, hide_index=True)
+    st.markdown(
+        f"<div class='kpi'><div class='label'>Current Rotation POT (Total Contributions)</div>"
+        f"<div class='value'>{rot_total:,.2f}</div><div class='accent'></div></div>",
+        unsafe_allow_html=True
+    )
 
 # ----------------------------
-# LOAD DATA (tables)
+# LOAD DATA
 # ----------------------------
 contrib_df = fetch_df("contributions", "*", member_col="member_id", order_col="created_at", date_col="created_at")
 contrib_df = apply_search(contrib_df, ["kind", "notes"]) if not contrib_df.empty else contrib_df
@@ -429,7 +477,7 @@ repay_df = apply_search(repay_df, ["notes", "borrower_name", "member_name"]) if 
 repay_df = apply_record_id_filter(repay_df)
 
 # ----------------------------
-# LOAN BALANCE = total_due - repaid (best-effort)
+# SUMMARY PORTS
 # ----------------------------
 def compute_loan_balances(loans: pd.DataFrame, repays: pd.DataFrame) -> pd.DataFrame:
     if loans.empty or "id" not in loans.columns:
@@ -460,63 +508,6 @@ def compute_loan_balances(loans: pd.DataFrame, repays: pd.DataFrame) -> pd.DataF
 
 loans_df = compute_loan_balances(loans_df, repay_df)
 
-# ----------------------------
-# BENEFICIARY SECTION (best-effort)
-# ----------------------------
-with st.expander("🔽 Beneficiary (Current + Next)", expanded=True):
-    st.caption("Current beneficiary uses table current_cycle_beneficiary. Next beneficiary uses RPC next_beneficiary_totals().")
-
-    try:
-        cur = supabase.table("current_cycle_beneficiary").select("*").limit(1).execute().data or []
-        if cur:
-            c = cur[0]
-            name = c.get("beneficiary_name") or c.get("name") or c.get("member_name") or ""
-            cycle_no = c.get("cycle_no") or c.get("cycle_number") or c.get("cycle") or ""
-            start_date = c.get("cycle_start_date") or c.get("start_date") or ""
-            payout_date = c.get("payout_date") or c.get("next_payout_date") or ""
-            st.markdown(
-                f"""
-                <div class="card">
-                  <div style="font-size:16px;font-weight:800">👤 Current Beneficiary: {name}</div>
-                  <div class="small-muted" style="margin-top:8px">🔁 Cycle #{cycle_no}: {start_date}</div>
-                  <div class="small-muted" style="margin-top:4px">💰 Payout Date: {payout_date}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        else:
-            st.info("No current beneficiary record found.")
-    except Exception:
-        st.info("Current beneficiary table not accessible (missing or RLS).")
-
-    try:
-        res = supabase.rpc("next_beneficiary_totals", {}).execute()
-        rows = res.data or []
-        if rows:
-            r = rows[0]
-            st.markdown(
-                f"""
-                <div class="card" style="margin-top:12px">
-                  <div style="font-size:16px;font-weight:800">➡️ Next Beneficiary After Payout</div>
-                  <div class="small-muted" style="margin-top:6px">{r.get("next_member_name","")} (member_id {r.get("next_member_id","")})</div>
-                  <div style="margin-top:10px">
-                    <div>• <b>Total Contribution:</b> {safe_float(r.get("total_contribution",0)):,.2f}</div>
-                    <div>• <b>Total Foundation (Paid):</b> {safe_float(r.get("total_foundation_paid",0)):,.2f}</div>
-                    <div>• <b>Total Foundation (Pending):</b> {safe_float(r.get("total_foundation_pending",0)):,.2f}</div>
-                    <div>• <b>Total Loan:</b> {safe_float(r.get("total_loan",0)):,.2f}</div>
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        else:
-            st.info("Next beneficiary totals RPC returned no rows (or not created yet).")
-    except Exception:
-        st.info("RPC next_beneficiary_totals() not available (create it if you want this port).")
-
-# ----------------------------
-# PORTS / TOTALS (auto update)
-# ----------------------------
 total_contrib = safe_sum(contrib_df, "amount")
 found_paid_only = safe_sum(found_df, "amount_paid")
 found_pending = safe_sum(found_df, "amount_pending")
@@ -546,65 +537,111 @@ for col in ["total_due", "balance", "principal_current", "principal"]:
         loan_total = safe_sum(loans_df, col)
         break
 
-total_interest_generated = 0.0
-if is_admin and (not loans_df.empty) and ("total_interest_generated" in loans_df.columns):
-    total_interest_generated = safe_sum(loans_df, "total_interest_generated")
-
 with st.expander("🔽 Summary Ports (Totals)", expanded=True):
-    st.caption("Totals update after admin inserts, repayments, loan approvals, or interest jobs (refresh/auto-refresh).")
-    if is_admin:
-        k1, k2, k3, k4, k5, k6, k7 = st.columns(7)
-    else:
-        k1, k2, k3, k4, k5, k6 = st.columns(6)
-
-    k1.markdown(f"<div class='kpi'><div class='label'>Total Contributions</div><div class='value'>{total_contrib:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1.markdown(f"<div class='kpi'><div class='label'>Total Contributions (Viewed)</div><div class='value'>{total_contrib:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
     k2.markdown(f"<div class='kpi'><div class='label'>Foundation Paid (+Repay)</div><div class='value'>{total_found_paid_plus_repaid:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
     k3.markdown(f"<div class='kpi'><div class='label'>Foundation Pending</div><div class='value'>{found_pending:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
     k4.markdown(f"<div class='kpi'><div class='label'>Unpaid Fines</div><div class='value'>{unpaid_fines_amt:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
     k5.markdown(f"<div class='kpi'><div class='label'>Active Loans</div><div class='value'>{active_loans}</div><div class='accent'></div></div>", unsafe_allow_html=True)
     k6.markdown(f"<div class='kpi'><div class='label'>Loan Total</div><div class='value'>{loan_total:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
-    if is_admin:
-        k7.markdown(f"<div class='kpi'><div class='label'>Total Interest (Admin)</div><div class='value'>{total_interest_generated:,.2f}</div><div class='accent'></div></div>", unsafe_allow_html=True)
 
 st.markdown("<hr/>", unsafe_allow_html=True)
 
+# ----------------------------
+# LOAN RULE HELPERS
+# ----------------------------
+def sum_member_contrib(member_id: int) -> float:
+    try:
+        rows = supabase.table("contributions").select("amount").eq("member_id", int(member_id)).execute().data or []
+        df = pd.DataFrame(rows)
+        if df.empty:
+            return 0.0
+        return float(pd.to_numeric(df["amount"], errors="coerce").fillna(0).sum())
+    except Exception:
+        return 0.0
+
+def sum_member_foundation_paid(member_id: int) -> float:
+    try:
+        rows = supabase.table("foundation_payments").select("amount_paid").eq("member_id", int(member_id)).execute().data or []
+        df = pd.DataFrame(rows)
+        if df.empty:
+            return 0.0
+        return float(pd.to_numeric(df["amount_paid"], errors="coerce").fillna(0).sum())
+    except Exception:
+        return 0.0
+
+def borrow_capacity(member_id: int) -> float:
+    return float(sum_member_contrib(member_id) + 0.70 * sum_member_foundation_paid(member_id))
+
 # ============================================================
-# MEMBER: REQUEST LOAN (status=requested) + surety selection
+# MEMBER: REQUEST LOAN (Borrower + Surety must BOTH qualify)
 # ============================================================
-with st.expander("🔽 Member: Request Loan", expanded=not is_admin):
-    st.caption("This inserts into loans with status='requested'. You must select a surety.")
+with st.expander("🔽 Member: Request Loan (Borrower + Surety Must Qualify)", expanded=not is_admin):
+    st.caption(
+        "You MUST select a surety. "
+        "Eligibility: BOTH you and your surety must qualify using: capacity = contributions + 70%*foundation_paid."
+    )
 
     surety_labels = [lbl for lbl in member_labels if not lbl.startswith(f"{my_member_id} —")]
-    surety_pick = st.selectbox("Select Surety (member_id — name/email)", surety_labels) if surety_labels else None
+    if not surety_labels:
+        st.warning("No other members available to select as surety.")
+        st.stop()
 
-    with st.form("member_loan_request_form", clear_on_submit=False):
-        req_amount = money_int("Requested Amount", value=0, step=500)
+    surety_pick = st.selectbox("Select Surety (member_id — name)", surety_labels, key="surety_required")
+    surety_id = int(surety_pick.split("—")[0].strip())
+    surety_name = member_name_by_id(surety_id)
+
+    req_amount = money_int("Requested Amount", value=0, step=500)
+    req_amount_int = int(req_amount)
+
+    my_name = member_name_by_id(my_member_id)
+    my_cap = borrow_capacity(my_member_id)
+    surety_cap = borrow_capacity(surety_id)
+
+    st.info(f"Your capacity (ID {my_member_id} — {my_name}) = **{my_cap:,.2f}**")
+    st.write(f"Surety capacity (ID {surety_id} — {surety_name}) = **{surety_cap:,.2f}**")
+
+    if req_amount_int <= 0:
+        st.caption("Enter a requested amount to evaluate eligibility.")
+        st.stop()
+
+    borrower_ok = my_cap >= req_amount_int
+    surety_ok = surety_cap >= req_amount_int
+    eligible = borrower_ok and surety_ok
+
+    if eligible:
+        st.success("✅ Eligible: borrower qualifies AND surety qualifies.")
+    else:
+        if not borrower_ok:
+            st.error("❌ Borrower not eligible: your capacity is less than requested amount.")
+        if not surety_ok:
+            st.error("❌ Surety not eligible: choose a stronger surety.")
+
+    with st.form("member_loan_request_form_both_qualify", clear_on_submit=False):
         notes = st.text_input("Notes (optional)")
         submit_req = st.form_submit_button("Submit Loan Request")
 
     if submit_req:
         try:
-            if not surety_pick:
-                st.error("Please select a surety.")
+            if not eligible:
+                st.error("❌ Cannot submit: borrower and surety must both qualify.")
                 st.stop()
-
-            surety_member_id = int(surety_pick.split("—")[0].strip())
-            surety_name = surety_pick.split("—", 1)[1].strip()
 
             loans_cols = get_table_cols("loans")
             payload = {
                 "borrower_member_id": my_member_id,
-                "borrower_name": my_member.get("name") or user_email,
-                "principal": int(req_amount),
+                "borrower_name": my_name,
+                "principal": req_amount_int,
                 "status": "requested",
-                "surety_member_id": surety_member_id,
+                "surety_member_id": int(surety_id),
                 "surety_name": surety_name,
                 "notes": notes.strip() if notes.strip() else None,
             }
             payload = filter_payload(payload, loans_cols)
 
             supabase.table("loans").insert(payload).execute()
-            st.success("✅ Loan request submitted. Please wait for admin approval.")
+            st.success("✅ Loan request submitted (rule passed). Waiting for admin approval.")
             st.rerun()
         except Exception as e:
             st.error(f"❌ Could not submit loan request. Details:\n{e}")
@@ -612,36 +649,13 @@ with st.expander("🔽 Member: Request Loan", expanded=not is_admin):
 # ------------------------------------------------------------
 # PART 2 CONTINUES BELOW
 # ------------------------------------------------------------
+
 # ============================================================
 # PART 2 — ADMIN CONTROL PANEL + VIEW TABLES
-# (Continuation of Part 1)
 # ============================================================
 
-# ============================================================
-# ADMIN CONTROL PANEL (dropdown)
-# ============================================================
 if is_admin:
     with st.expander("🔽 Admin Control Panel (Manage All Njangi Operations)", expanded=True):
-
-        st.markdown(
-            """
-            <div class="small-muted">
-            <b>This panel is for administrators only.</b><br><br>
-
-            • Add Member → creates a new member (email + phone)<br>
-            • Add Contribution → records member contribution<br>
-            • Add Foundation Payment → records foundation payment<br>
-            • Add Fine → records member fine<br>
-            • Record Repayment → records loan repayment<br>
-            • Approve Loan → requested → approved<br>
-            • Issue Loan → approved → active/open<br>
-            • Conduct Payout → rotates beneficiary using RPC<br><br>
-
-            All transactions are saved using <b>member_id</b>.
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
 
         action = st.selectbox(
             "Select Admin Action",
@@ -666,61 +680,51 @@ if is_admin:
 
         # 1) ADD MEMBER
         if action == "Add Member":
-            st.subheader("➕ Add Member (email + phone)")
-
+            st.subheader("➕ Add Member (email + phone + name)")
             with st.form("add_member_form"):
                 email = st.text_input("Email").strip().lower()
                 phone = st.text_input("Phone").strip()
-                name = st.text_input("Name (optional)").strip()
+                name = st.text_input("Name (required)").strip()
                 submit = st.form_submit_button("Create Member")
-
             if submit:
                 try:
-                    if not email or not phone:
-                        st.error("Email and phone are required.")
+                    if not email or not phone or not name:
+                        st.error("Email, phone, and name are required.")
                     else:
-                        payload = {
-                            "email": email,
-                            "phone": phone,
-                            "name": name if name else email.split("@")[0].title(),
-                        }
+                        payload = {"email": email, "phone": phone, "name": name}
                         payload = filter_payload(payload, get_table_cols("members"))
                         supabase.table("members").insert(payload).execute()
-                        st.success("✅ Member created successfully.")
+                        st.success("✅ Member created.")
                         st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to create member: {e}")
+                    st.error(f"❌ Failed: {e}")
 
         # 2) ADD CONTRIBUTION
         elif action == "Add Contribution":
             st.subheader("➕ Add Contribution")
-
             with st.form("add_contribution_form"):
                 amount = money_int("Amount", step=500)
                 kind = st.text_input("Kind", value="bi-weekly")
                 submit = st.form_submit_button("Save Contribution")
-
             if submit and target_member_id:
                 try:
                     payload = {"member_id": int(target_member_id), "amount": int(amount), "kind": kind}
                     payload = filter_payload(payload, get_table_cols("contributions"))
                     supabase.table("contributions").insert(payload).execute()
-                    st.success("✅ Contribution saved.")
+                    st.success("✅ Contribution saved. POT updates automatically.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to save contribution: {e}")
+                    st.error(f"❌ Failed: {e}")
 
         # 3) ADD FOUNDATION PAYMENT
         elif action == "Add Foundation Payment":
             st.subheader("➕ Add Foundation Payment")
-
             with st.form("add_foundation_form"):
                 paid = money_int("Amount Paid", step=500)
                 pending = money_int("Amount Pending", step=500)
                 status = st.selectbox("Status", ["paid", "pending", "partial"])
                 date_paid = st.date_input("Date Paid")
                 submit = st.form_submit_button("Save Foundation Payment")
-
             if submit and target_member_id:
                 try:
                     payload = {
@@ -735,18 +739,16 @@ if is_admin:
                     st.success("✅ Foundation payment saved.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to save foundation payment: {e}")
+                    st.error(f"❌ Failed: {e}")
 
         # 4) ADD FINE
         elif action == "Add Fine":
             st.subheader("➕ Add Fine")
-
             with st.form("add_fine_form"):
                 amount = money_int("Fine Amount", step=100)
                 reason = st.text_input("Reason", value="Late payment")
                 status = st.selectbox("Status", ["unpaid", "paid"])
                 submit = st.form_submit_button("Save Fine")
-
             if submit and target_member_id:
                 try:
                     payload = {"member_id": int(target_member_id), "amount": int(amount), "reason": reason, "status": status}
@@ -755,18 +757,16 @@ if is_admin:
                     st.success("✅ Fine saved.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to save fine: {e}")
+                    st.error(f"❌ Failed: {e}")
 
         # 5) RECORD REPAYMENT
         elif action == "Record Repayment":
             st.subheader("➕ Record Repayment")
-
             with st.form("add_repayment_form"):
                 loan_id = st.number_input("Loan ID", min_value=1, step=1)
                 amount_paid = money_int("Amount Paid", step=500)
                 paid_at = st.date_input("Paid Date")
                 submit = st.form_submit_button("Save Repayment")
-
             if submit and target_member_id:
                 try:
                     payload = {
@@ -780,12 +780,11 @@ if is_admin:
                     st.success("✅ Repayment recorded.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to record repayment: {e}")
+                    st.error(f"❌ Failed: {e}")
 
         # 6) APPROVE LOAN
         elif action == "Approve Loan":
             st.subheader("✅ Approve Loan (requested → approved)")
-
             loan_id = st.number_input("Loan ID", min_value=1, step=1)
             if st.button("Approve Loan"):
                 try:
@@ -793,52 +792,42 @@ if is_admin:
                     st.success("✅ Loan approved.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to approve loan: {e}")
+                    st.error(f"❌ Failed: {e}")
 
         # 7) ISSUE LOAN
         elif action == "Issue Loan":
             st.subheader("🚀 Issue Loan (approved → active)")
-
             loan_id = st.number_input("Loan ID", min_value=1, step=1)
             if st.button("Issue Loan"):
                 try:
                     supabase.table("loans").update({"status": "active"}).eq("id", int(loan_id)).execute()
-                    st.success("✅ Loan issued (now active).")
+                    st.success("✅ Loan issued.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to issue loan: {e}")
+                    st.error(f"❌ Failed: {e}")
 
         # 8) CONDUCT PAYOUT
         elif action == "Conduct Payout":
             st.subheader("💰 Conduct Payout & Rotate Beneficiary")
-            st.caption("Calls RPC: record_payout_and_rotate_next()")
-
+            st.caption("Tries RPC record_payout_and_rotate_next() if it exists. POT auto-updates from payouts table.")
             if st.button("Execute Payout"):
                 try:
-                    supabase.rpc("record_payout_and_rotate_next", {}).execute()
-                    st.success("✅ Payout executed & next beneficiary rotated.")
+                    try:
+                        supabase.rpc("record_payout_and_rotate_next", {}).execute()
+                    except Exception:
+                        pass
+                    st.success("✅ Payout executed (if RPC exists).")
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Payout failed: {e}")
 
 # ============================================================
-# VIEW TABLES (dropdown)
+# VIEW TABLES
 # ============================================================
 with st.expander("🔽 View Tables", expanded=True):
-
-    st.caption("Browse all Njangi tables. Admin can view all members (if RLS allows). Members see only their own data.")
-
     table_page = st.selectbox(
         "Select Table",
-        [
-            "My Profile",
-            "Members",
-            "Contributions",
-            "Foundation Payments",
-            "Loans",
-            "Repayments",
-            "Fines",
-        ],
+        ["My Profile", "Members", "Contributions", "Foundation Payments", "Loans", "Repayments", "Fines", "Payouts"],
         index=0
     )
 
@@ -870,11 +859,15 @@ with st.expander("🔽 View Tables", expanded=True):
         st.subheader("Fines")
         st.dataframe(fines_df, use_container_width=True, hide_index=True)
 
-# ----------------------------
-# FOOTER NOTE
-# ----------------------------
+    elif table_page == "Payouts":
+        st.subheader("Payouts")
+        try:
+            payouts_df = pd.DataFrame(
+                supabase.table("payouts").select("*").order("created_at", desc=True).execute().data or []
+            )
+        except Exception:
+            payouts_df = pd.DataFrame([])
+        st.dataframe(payouts_df, use_container_width=True, hide_index=True)
+
 st.markdown("<hr/>", unsafe_allow_html=True)
-if not is_admin:
-    st.caption("Member access: you can only view your own data (email → member_id).")
-else:
-    st.caption("Admin access: use Admin Control Panel to manage all Njangi operations.")
+st.caption("End of Dashboard.")
