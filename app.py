@@ -2,20 +2,34 @@
 import os
 import streamlit as st
 import pandas as pd
-from dotenv import load_dotenv
 from supabase import create_client
 
-load_dotenv()
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
-
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    raise RuntimeError("Missing SUPABASE_URL or SUPABASE_ANON_KEY in .env")
+# ------------------------------------------------------------
+# Njangi Admin Dashboard (UPDATED)
+# - Uses Streamlit Secrets (works on Streamlit Cloud)
+# - Fixes profiles select to match your real columns:
+#   profiles(id, role, created_at, member_id, approved, updated_at)
+# ------------------------------------------------------------
 
 st.set_page_config(page_title="Njangi Admin Dashboard", layout="wide")
 
-# Base client (anon). We will attach user session after login for RLS.
+# ---- Read secrets safely (Streamlit Cloud) ----
+# Put these in Streamlit Cloud -> Manage app -> Settings -> Secrets:
+# SUPABASE_URL = "https://xxxxx.supabase.co"
+# SUPABASE_ANON_KEY = "your_anon_key"
+try:
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_ANON_KEY = st.secrets["SUPABASE_ANON_KEY"]
+except Exception:
+    # Fallback for local run (optional)
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    st.error("Missing SUPABASE_URL or SUPABASE_ANON_KEY. Add them to Streamlit Secrets.")
+    st.stop()
+
+# Base client (anon). We attach user session after login for RLS.
 sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 
@@ -39,13 +53,32 @@ def require_login():
 
 
 def get_profile(c):
+    """
+    Your profiles table columns (from your screenshot):
+    id (uuid), role (text), created_at, member_id (bigint), approved (boolean), updated_at
+    """
     user = st.session_state["session"].user
-    r = c.table("profiles").select("id,full_name,phone,role").eq("id", user.id).single().execute()
+    r = (
+        c.table("profiles")
+        .select("id,role,approved,member_id")
+        .eq("id", user.id)
+        .single()
+        .execute()
+    )
     return r.data
 
 
 def must_be_admin(profile):
-    if not profile or profile.get("role") != "admin":
+    if not profile:
+        st.error("No profile found for this user. (profiles row is missing for your auth.uid())")
+        st.stop()
+
+    # Optional: require approved = true
+    if profile.get("approved") is False:
+        st.error("Your account is not approved yet. (profiles.approved must be true)")
+        st.stop()
+
+    if profile.get("role") != "admin":
         st.error("Access denied. Your account is not an admin. (profiles.role must be 'admin')")
         st.stop()
 
@@ -76,7 +109,10 @@ with st.sidebar:
         u = st.session_state.session.user
         st.success(f"Logged in: {u.email}")
         if st.button("Logout", use_container_width=True):
-            sb.auth.sign_out()
+            try:
+                sb.auth.sign_out()
+            except Exception:
+                pass
             st.session_state.session = None
             st.rerun()
 
@@ -85,26 +121,50 @@ c = auth_client()
 profile = get_profile(c)
 must_be_admin(profile)
 
-st.caption(f"Admin: **{profile.get('full_name') or profile['id']}**")
+st.caption(f"Admin: **{profile['id']}**  | role: **{profile['role']}**")
 
 # -----------------------
 # Helper queries
 # -----------------------
 def list_cycles():
-    return c.table("cycles").select("cycle_id,name,start_date,is_active,created_at").order("created_at", desc=True).execute()
+    return (
+        c.table("cycles")
+        .select("cycle_id,name,start_date,is_active,created_at")
+        .order("created_at", desc=True)
+        .execute()
+    )
+
 
 def list_sessions(cycle_id=None):
-    q = c.table("sessions").select("session_id,cycle_id,session_date,due_date,status,created_at").order("created_at", desc=True)
+    q = (
+        c.table("sessions")
+        .select("session_id,cycle_id,session_date,due_date,status,created_at")
+        .order("created_at", desc=True)
+    )
     if cycle_id:
         q = q.eq("cycle_id", cycle_id)
     return q.execute()
 
+
 def list_active_members():
-    # members table is UUID-based now
-    return c.table("members").select("member_id,is_active,contribution_amount,surety_id,joined_at").order("joined_at", desc=True).execute()
+    # Based on your schema changes mentioned in code: member_id is UUID
+    return (
+        c.table("members")
+        .select("member_id,is_active,contribution_amount,surety_id,joined_at")
+        .order("joined_at", desc=True)
+        .execute()
+    )
+
 
 def list_cycle_members(cycle_id):
-    return c.table("cycle_members").select("cycle_id,member_id,payout_position").eq("cycle_id", cycle_id).order("payout_position").execute()
+    return (
+        c.table("cycle_members")
+        .select("cycle_id,member_id,payout_position")
+        .eq("cycle_id", cycle_id)
+        .order("payout_position")
+        .execute()
+    )
+
 
 def upsert_contribution(session_id, member_id, amount, paid):
     payload = {
@@ -113,13 +173,9 @@ def upsert_contribution(session_id, member_id, amount, paid):
         "amount": int(amount),
         "paid": bool(paid),
     }
-    # store paid_at only when paid
-    if paid:
-        payload["paid_at"] = pd.Timestamp.utcnow().isoformat()
-    else:
-        payload["paid_at"] = None
-
+    payload["paid_at"] = pd.Timestamp.utcnow().isoformat() if paid else None
     return c.table("contributions").upsert(payload, on_conflict="session_id,member_id").execute()
+
 
 def upsert_foundation(session_id, member_id, amount, paid):
     payload = {
@@ -128,12 +184,9 @@ def upsert_foundation(session_id, member_id, amount, paid):
         "amount": int(amount),
         "paid": bool(paid),
     }
-    if paid:
-        payload["paid_at"] = pd.Timestamp.utcnow().isoformat()
-    else:
-        payload["paid_at"] = None
-
+    payload["paid_at"] = pd.Timestamp.utcnow().isoformat() if paid else None
     return c.table("foundation_payments").upsert(payload, on_conflict="session_id,member_id").execute()
+
 
 def create_session_rows_for_cycle_members(session_id, cycle_id):
     """
@@ -144,12 +197,18 @@ def create_session_rows_for_cycle_members(session_id, cycle_id):
     if not cm:
         return 0
 
-    # For each member, default contribution amount comes from members table
     count = 0
     for row in cm:
         mid = row["member_id"]
-        m = c.table("members").select("contribution_amount").eq("member_id", mid).single().execute().data
-        contrib_amt = int(m["contribution_amount"]) if m else 500
+        m = (
+            c.table("members")
+            .select("contribution_amount")
+            .eq("member_id", mid)
+            .single()
+            .execute()
+            .data
+        )
+        contrib_amt = int(m["contribution_amount"]) if m and m.get("contribution_amount") else 500
 
         upsert_contribution(session_id, mid, contrib_amt, False)
         upsert_foundation(session_id, mid, 500, False)
@@ -157,21 +216,24 @@ def create_session_rows_for_cycle_members(session_id, cycle_id):
 
     return count
 
+
 # -----------------------
 # Tabs
 # -----------------------
-tabs = st.tabs([
-    "1) Approve Members",
-    "2) Cycles",
-    "3) Payout Order",
-    "4) Sessions",
-    "5) Contributions",
-    "6) Foundation",
-    "7) Close Session + Fines",
-    "8) Loans",
-    "9) Payouts",
-    "10) Reports & Settings"
-])
+tabs = st.tabs(
+    [
+        "1) Approve Members",
+        "2) Cycles",
+        "3) Payout Order",
+        "4) Sessions",
+        "5) Contributions",
+        "6) Foundation",
+        "7) Close Session + Fines",
+        "8) Loans",
+        "9) Payouts",
+        "10) Reports & Settings",
+    ]
+)
 
 # 1) Approve Members
 with tabs[0]:
@@ -207,12 +269,14 @@ with tabs[1]:
 
     if st.button("Create Cycle"):
         try:
-            c.table("cycles").insert({
-                "name": cycle_name,
-                "start_date": str(start_date),
-                "is_active": bool(is_active),
-                "created_by": profile["id"]
-            }).execute()
+            c.table("cycles").insert(
+                {
+                    "name": cycle_name,
+                    "start_date": str(start_date),
+                    "is_active": bool(is_active),
+                    "created_by": profile["id"],
+                }
+            ).execute()
             st.success("Cycle created.")
             st.rerun()
         except Exception as e:
@@ -242,11 +306,10 @@ with tabs[2]:
 
     if st.button("Add/Upsert member in payout order"):
         try:
-            c.table("cycle_members").upsert({
-                "cycle_id": cycle_id,
-                "member_id": member_id,
-                "payout_position": int(pos)
-            }, on_conflict="cycle_id,member_id").execute()
+            c.table("cycle_members").upsert(
+                {"cycle_id": cycle_id, "member_id": member_id, "payout_position": int(pos)},
+                on_conflict="cycle_id,member_id",
+            ).execute()
             st.success("Saved payout order.")
             st.rerun()
         except Exception as e:
@@ -267,16 +330,24 @@ with tabs[3]:
 
     if st.button("Create Session + Auto-generate rows"):
         try:
-            res = c.table("sessions").insert({
-                "cycle_id": cycle_id,
-                "session_date": str(session_date),
-                "due_date": str(due_date),
-                "status": "open"
-            }).execute()
+            res = (
+                c.table("sessions")
+                .insert(
+                    {
+                        "cycle_id": cycle_id,
+                        "session_date": str(session_date),
+                        "due_date": str(due_date),
+                        "status": "open",
+                    }
+                )
+                .execute()
+            )
 
             new_session_id = res.data[0]["session_id"]
             created = create_session_rows_for_cycle_members(new_session_id, cycle_id)
-            st.success(f"Session created. Generated rows for {created} members (contributions + foundation).")
+            st.success(
+                f"Session created. Generated rows for {created} members (contributions + foundation)."
+            )
             st.rerun()
         except Exception as e:
             st.error(str(e))
@@ -290,7 +361,13 @@ with tabs[4]:
 
     session_id = st.text_input("Session ID to view/edit contributions", key="contrib_session_id")
     if session_id:
-        r = c.table("contributions").select("*").eq("session_id", session_id).order("created_at").execute()
+        r = (
+            c.table("contributions")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("created_at")
+            .execute()
+        )
         st.dataframe(df(r), use_container_width=True)
 
     st.markdown("### Update a member contribution")
@@ -317,7 +394,13 @@ with tabs[5]:
 
     session_id = st.text_input("Session ID to view/edit foundation payments", key="f_session_id")
     if session_id:
-        r = c.table("foundation_payments").select("*").eq("session_id", session_id).order("created_at").execute()
+        r = (
+            c.table("foundation_payments")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("created_at")
+            .execute()
+        )
         st.dataframe(df(r), use_container_width=True)
 
     st.markdown("### Update a member foundation payment")
@@ -403,11 +486,9 @@ with tabs[7]:
 
     if st.button("Add loan payment"):
         try:
-            c.table("loan_payments").insert({
-                "loan_id": pay_loan_id,
-                "amount": int(pay_amount),
-                "confirmed_by": profile["id"]
-            }).execute()
+            c.table("loan_payments").insert(
+                {"loan_id": pay_loan_id, "amount": int(pay_amount), "confirmed_by": profile["id"]}
+            ).execute()
             st.success("Payment recorded.")
         except Exception as e:
             st.error(str(e))
@@ -433,13 +514,15 @@ with tabs[8]:
 
     if st.button("Release payout"):
         try:
-            c.table("payouts").insert({
-                "cycle_id": p_cycle,
-                "session_id": p_session,
-                "member_id": p_member,
-                "amount": int(p_amount),
-                "released_by": profile["id"]
-            }).execute()
+            c.table("payouts").insert(
+                {
+                    "cycle_id": p_cycle,
+                    "session_id": p_session,
+                    "member_id": p_member,
+                    "amount": int(p_amount),
+                    "released_by": profile["id"],
+                }
+            ).execute()
             st.success("Payout released.")
         except Exception as e:
             st.error(str(e))
@@ -467,7 +550,10 @@ with tabs[9]:
     new_fine = st.number_input("Set late_fine_amount", min_value=0, step=10, value=50)
     if st.button("Update late fine amount"):
         try:
-            c.table("app_config").upsert({"key": "late_fine_amount", "value": str(int(new_fine))}, on_conflict="key").execute()
+            c.table("app_config").upsert(
+                {"key": "late_fine_amount", "value": str(int(new_fine))},
+                on_conflict="key",
+            ).execute()
             st.success("Updated.")
             st.rerun()
         except Exception as e:
