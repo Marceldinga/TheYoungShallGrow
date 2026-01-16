@@ -2,10 +2,11 @@
 import pandas as pd
 import streamlit as st
 from supabase import create_client
+from datetime import date, timedelta
 
 # ============================================================
 # THE YOUNG SHALL GROW — Njangi Dashboard (SINGLE APP)
-# PART 1 / PART 2
+# PART 1  (PART 2 CONTINUES BELOW)
 # ------------------------------------------------------------
 # ✅ Supabase Auth login (email/password)
 # ✅ Clean organized dropdown sections with short notes
@@ -34,6 +35,16 @@ try:
     from streamlit_autorefresh import st_autorefresh
 except Exception:
     st_autorefresh = None
+
+# ----------------------------
+# PAYOUT SETTINGS (YOUR RULE)
+# ----------------------------
+SEASON_START_DATE = date(2026, 1, 3)   # ID 1 is paid on this date
+PAYOUT_EVERY_DAYS = 14                 # bi-weekly
+
+def payout_date_for_member_id(member_id: int) -> date:
+    # ID 1 -> start date, ID 2 -> +14 days, ID 3 -> +28 days, ...
+    return SEASON_START_DATE + timedelta(days=PAYOUT_EVERY_DAYS * (int(member_id) - 1))
 
 # ----------------------------
 # THEME
@@ -115,11 +126,9 @@ def safe_float(x, default=0.0):
         return default
 
 def money_int(label: str, value: int = 0, step: int = 500, min_value: int = 0):
-    # critical: sends integer not float
     return st.number_input(label, min_value=min_value, value=value, step=step, format="%d")
 
 def get_table_cols(table: str) -> set:
-    # best-effort: infer cols from one row
     try:
         d = supabase.table(table).select("*").limit(1).execute().data or []
         if d:
@@ -353,6 +362,48 @@ def build_member_labels(df: pd.DataFrame):
 member_labels = build_member_labels(members_df)
 
 # ----------------------------
+# PAYOUT SCHEDULE (NEW PORT)
+# ----------------------------
+with st.expander("🔽 Payout Schedule (Bi-weekly by Member ID)", expanded=True):
+    st.caption("Rule: Season started 2026-01-03. ID 1 paid on 2026-01-03, ID 2 on 2026-01-17, then every 14 days.")
+
+    # logged-in member payout date
+    my_payout = payout_date_for_member_id(my_member_id)
+    st.info(f"✅ Your payout date (member_id {my_member_id}) is **{my_payout}**")
+
+    # Build schedule from members_df
+    if members_df.empty or "id" not in members_df.columns:
+        st.warning("Members list is empty or missing 'id' column.")
+    else:
+        sched = members_df.copy()
+        sched["id"] = pd.to_numeric(sched["id"], errors="coerce")
+        sched = sched.dropna(subset=["id"]).sort_values("id").reset_index(drop=True)
+        sched["id"] = sched["id"].astype(int)
+        sched["payout_date"] = sched["id"].apply(payout_date_for_member_id)
+
+        today = date.today()
+        sched["status"] = "Upcoming"
+        sched.loc[sched["payout_date"] < today, "status"] = "Paid (past)"
+        sched.loc[sched["payout_date"] == today, "status"] = "Due Today"
+
+        upcoming = sched[sched["payout_date"] >= today].sort_values("payout_date")
+        if not upcoming.empty:
+            nxt = upcoming.iloc[0]
+            nm = nxt["name"] if "name" in upcoming.columns else ""
+            st.success(f"Next payout: **{nm}** (ID **{int(nxt['id'])}**) on **{nxt['payout_date']}**")
+        else:
+            st.warning("No upcoming payout found from today onward (check start date / IDs).")
+
+        # Admin sees all; member sees only their row
+        if is_admin:
+            show = [c for c in ["id", "name", "email", "payout_date", "status"] if c in sched.columns]
+            st.dataframe(sched[show], use_container_width=True, hide_index=True)
+        else:
+            my_row = sched[sched["id"] == my_member_id]
+            show = [c for c in ["id", "name", "email", "payout_date", "status"] if c in sched.columns]
+            st.dataframe(my_row[show], use_container_width=True, hide_index=True)
+
+# ----------------------------
 # LOAD DATA (tables)
 # ----------------------------
 contrib_df = fetch_df("contributions", "*", member_col="member_id", order_col="created_at", date_col="created_at")
@@ -559,9 +610,8 @@ with st.expander("🔽 Member: Request Loan", expanded=not is_admin):
             st.error(f"❌ Could not submit loan request. Details:\n{e}")
 
 # ------------------------------------------------------------
-# PART 2 CONTINUES BELOW (Admin Control Panel + View Tables)
+# PART 2 CONTINUES BELOW
 # ------------------------------------------------------------
-
 # ============================================================
 # PART 2 — ADMIN CONTROL PANEL + VIEW TABLES
 # (Continuation of Part 1)
@@ -593,9 +643,6 @@ if is_admin:
             unsafe_allow_html=True
         )
 
-        # ----------------------------
-        # Admin action selector
-        # ----------------------------
         action = st.selectbox(
             "Select Admin Action",
             [
@@ -610,21 +657,14 @@ if is_admin:
             ]
         )
 
-        # ----------------------------
-        # Member selector (for all actions)
-        # ----------------------------
         if members_df.empty:
             st.warning("No members found. Please add members first.")
             target_member_id = None
-            target_member_name = ""
         else:
             target_label = st.selectbox("Select Member (member_id — name/email)", member_labels)
             target_member_id = int(target_label.split("—")[0].strip())
-            target_member_name = target_label.split("—", 1)[1].strip()
 
-        # ====================================================
         # 1) ADD MEMBER
-        # ====================================================
         if action == "Add Member":
             st.subheader("➕ Add Member (email + phone)")
 
@@ -651,9 +691,7 @@ if is_admin:
                 except Exception as e:
                     st.error(f"❌ Failed to create member: {e}")
 
-        # ====================================================
         # 2) ADD CONTRIBUTION
-        # ====================================================
         elif action == "Add Contribution":
             st.subheader("➕ Add Contribution")
 
@@ -664,11 +702,7 @@ if is_admin:
 
             if submit and target_member_id:
                 try:
-                    payload = {
-                        "member_id": int(target_member_id),
-                        "amount": int(amount),
-                        "kind": kind,
-                    }
+                    payload = {"member_id": int(target_member_id), "amount": int(amount), "kind": kind}
                     payload = filter_payload(payload, get_table_cols("contributions"))
                     supabase.table("contributions").insert(payload).execute()
                     st.success("✅ Contribution saved.")
@@ -676,9 +710,7 @@ if is_admin:
                 except Exception as e:
                     st.error(f"❌ Failed to save contribution: {e}")
 
-        # ====================================================
         # 3) ADD FOUNDATION PAYMENT
-        # ====================================================
         elif action == "Add Foundation Payment":
             st.subheader("➕ Add Foundation Payment")
 
@@ -705,9 +737,7 @@ if is_admin:
                 except Exception as e:
                     st.error(f"❌ Failed to save foundation payment: {e}")
 
-        # ====================================================
         # 4) ADD FINE
-        # ====================================================
         elif action == "Add Fine":
             st.subheader("➕ Add Fine")
 
@@ -719,12 +749,7 @@ if is_admin:
 
             if submit and target_member_id:
                 try:
-                    payload = {
-                        "member_id": int(target_member_id),
-                        "amount": int(amount),
-                        "reason": reason,
-                        "status": status,
-                    }
+                    payload = {"member_id": int(target_member_id), "amount": int(amount), "reason": reason, "status": status}
                     payload = filter_payload(payload, get_table_cols("fines"))
                     supabase.table("fines").insert(payload).execute()
                     st.success("✅ Fine saved.")
@@ -732,9 +757,7 @@ if is_admin:
                 except Exception as e:
                     st.error(f"❌ Failed to save fine: {e}")
 
-        # ====================================================
         # 5) RECORD REPAYMENT
-        # ====================================================
         elif action == "Record Repayment":
             st.subheader("➕ Record Repayment")
 
@@ -759,9 +782,7 @@ if is_admin:
                 except Exception as e:
                     st.error(f"❌ Failed to record repayment: {e}")
 
-        # ====================================================
         # 6) APPROVE LOAN
-        # ====================================================
         elif action == "Approve Loan":
             st.subheader("✅ Approve Loan (requested → approved)")
 
@@ -774,9 +795,7 @@ if is_admin:
                 except Exception as e:
                     st.error(f"❌ Failed to approve loan: {e}")
 
-        # ====================================================
         # 7) ISSUE LOAN
-        # ====================================================
         elif action == "Issue Loan":
             st.subheader("🚀 Issue Loan (approved → active)")
 
@@ -789,9 +808,7 @@ if is_admin:
                 except Exception as e:
                     st.error(f"❌ Failed to issue loan: {e}")
 
-        # ====================================================
         # 8) CONDUCT PAYOUT
-        # ====================================================
         elif action == "Conduct Payout":
             st.subheader("💰 Conduct Payout & Rotate Beneficiary")
             st.caption("Calls RPC: record_payout_and_rotate_next()")
