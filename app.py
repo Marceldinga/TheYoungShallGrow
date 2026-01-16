@@ -4,19 +4,26 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client
 
+# =================== CONFIG ===================
 st.set_page_config(page_title="Njangi Admin Dashboard", layout="wide")
 
-# ------------------- Secrets -------------------
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_ANON_KEY = st.secrets["SUPABASE_ANON_KEY"]
 
 sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-# ------------------- Helpers -------------------
+# =================== HELPERS ===================
 def df(resp):
     return pd.DataFrame(resp.data or [])
 
-# ------------------- Login -------------------
+def get_client():
+    c = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    sess = st.session_state.get("session")
+    if sess:
+        c.auth.set_session(sess.access_token, sess.refresh_token)
+    return c
+
+# =================== LOGIN ===================
 st.title("Njangi Admin Dashboard")
 
 if "session" not in st.session_state:
@@ -29,13 +36,16 @@ with st.sidebar:
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
 
-        if st.button("Login"):
-            res = sb.auth.sign_in_with_password({"email": email, "password": password})
-            st.session_state.session = res.session
-            st.rerun()
+        if st.button("Login", use_container_width=True):
+            try:
+                res = sb.auth.sign_in_with_password({"email": email, "password": password})
+                st.session_state.session = res.session
+                st.rerun()
+            except Exception as e:
+                st.error(str(e))
     else:
         st.success("Logged in")
-        if st.button("Logout"):
+        if st.button("Logout", use_container_width=True):
             sb.auth.sign_out()
             st.session_state.session = None
             st.rerun()
@@ -43,14 +53,9 @@ with st.sidebar:
 if st.session_state.session is None:
     st.stop()
 
-# ------------------- Client with RLS -------------------
-client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-client.auth.set_session(
-    st.session_state.session.access_token,
-    st.session_state.session.refresh_token,
-)
+client = get_client()
 
-# ------------------- Tabs -------------------
+# =================== TABS ===================
 tabs = st.tabs([
     "Members",
     "Current Season",
@@ -61,7 +66,7 @@ tabs = st.tabs([
 
 # ===================== MEMBERS =====================
 with tabs[0]:
-    st.subheader("All Njangi Members (Legacy Registry)")
+    st.subheader("All Njangi Members")
 
     members = client.table("member_registry") \
         .select("*") \
@@ -90,25 +95,31 @@ with tabs[0]:
 with tabs[1]:
     st.subheader("Current Season")
 
-    season = client.rpc("sql", {
-        "query": """
-        select
-            s.id as season_id,
-            s.start_date,
-            s.end_date,
-            s.status,
-            a.next_payout_index,
-            m.full_name as next_beneficiary
-        from public.sessions_legacy s
-        cross join public.app_state a
-        join public.member_registry m
-          on m.legacy_member_id = a.next_payout_index
-        where s.status = 'active'
-        limit 1;
-        """
-    }).execute()
+    try:
+        season = client.table("current_season_view").select("*").limit(1).execute()
 
-    st.dataframe(df(season), use_container_width=True)
+        if not season.data:
+            st.warning("No active season found.")
+        else:
+            row = season.data[0]
+
+            st.success("Active Season Loaded")
+
+            st.markdown(f"""
+            ### Season Info
+            - **Season ID:** `{row['season_id']}`
+            - **Start Date:** {row['season_start']}
+            - **Status:** {row['season_status']}
+
+            ### Next Payout
+            - **Next Payout Date:** {row['next_payout_date']}
+            - **Next Member ID:** {row['legacy_member_id']}
+            - **Next Beneficiary:** {row['next_beneficiary']}
+            """)
+
+    except Exception as e:
+        st.error("Failed to load season data. Check RLS or permissions.")
+        st.stop()
 
 # ===================== ROTATION =====================
 with tabs[2]:
@@ -120,13 +131,16 @@ with tabs[2]:
     st.markdown("### Advance Rotation (Bi-Weekly)")
 
     if st.button("Advance to Next Beneficiary"):
-        client.rpc("advance_rotation").execute()
-        st.success("Rotation advanced")
-        st.rerun()
+        try:
+            client.rpc("advance_rotation").execute()
+            st.success("Rotation advanced successfully")
+            st.rerun()
+        except Exception as e:
+            st.error(str(e))
 
 # ===================== CONTRIBUTIONS =====================
 with tabs[3]:
-    st.subheader("Contributions (Current Season)")
+    st.subheader("Contributions")
 
     contribs = client.table("contributions_legacy") \
         .select("*") \
