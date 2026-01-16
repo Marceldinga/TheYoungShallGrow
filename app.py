@@ -4,557 +4,144 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client
 
-# ------------------------------------------------------------
-# Njangi Admin Dashboard (UPDATED)
-# - Uses Streamlit Secrets (works on Streamlit Cloud)
-# - Fixes profiles select to match your real columns:
-#   profiles(id, role, created_at, member_id, approved, updated_at)
-# ------------------------------------------------------------
-
 st.set_page_config(page_title="Njangi Admin Dashboard", layout="wide")
 
-# ---- Read secrets safely (Streamlit Cloud) ----
-# Put these in Streamlit Cloud -> Manage app -> Settings -> Secrets:
-# SUPABASE_URL = "https://xxxxx.supabase.co"
-# SUPABASE_ANON_KEY = "your_anon_key"
-try:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-    SUPABASE_ANON_KEY = st.secrets["SUPABASE_ANON_KEY"]
-except Exception:
-    # Fallback for local run (optional)
-    SUPABASE_URL = os.getenv("SUPABASE_URL")
-    SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+# ------------------- Secrets -------------------
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_ANON_KEY = st.secrets["SUPABASE_ANON_KEY"]
 
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    st.error("Missing SUPABASE_URL or SUPABASE_ANON_KEY. Add them to Streamlit Secrets.")
-    st.stop()
-
-# Base client (anon). We attach user session after login for RLS.
 sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-
+# ------------------- Helpers -------------------
 def df(resp):
     return pd.DataFrame(resp.data or [])
 
-
-def auth_client():
-    """Supabase client with current user's access token (RLS applies)."""
-    c = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-    sess = st.session_state.get("session")
-    if sess:
-        c.auth.set_session(sess.access_token, sess.refresh_token)
-    return c
-
-
-def require_login():
-    if st.session_state.get("session") is None:
-        st.warning("Please login as an admin.")
-        st.stop()
-
-
-def get_profile(c):
-    """
-    Your profiles table columns (from your screenshot):
-    id (uuid), role (text), created_at, member_id (bigint), approved (boolean), updated_at
-    """
-    user = st.session_state["session"].user
-    r = (
-        c.table("profiles")
-        .select("id,role,approved,member_id")
-        .eq("id", user.id)
-        .single()
-        .execute()
-    )
-    return r.data
-
-
-def must_be_admin(profile):
-    if not profile:
-        st.error("No profile found for this user. (profiles row is missing for your auth.uid())")
-        st.stop()
-
-    # Optional: require approved = true
-    if profile.get("approved") is False:
-        st.error("Your account is not approved yet. (profiles.approved must be true)")
-        st.stop()
-
-    if profile.get("role") != "admin":
-        st.error("Access denied. Your account is not an admin. (profiles.role must be 'admin')")
-        st.stop()
-
-
-# -----------------------
-# Sidebar Login
-# -----------------------
+# ------------------- Login -------------------
 st.title("Njangi Admin Dashboard")
 
-with st.sidebar:
-    st.header("Login")
+if "session" not in st.session_state:
+    st.session_state.session = None
 
-    if "session" not in st.session_state:
-        st.session_state.session = None
+with st.sidebar:
+    st.header("Admin Login")
 
     if st.session_state.session is None:
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
 
-        if st.button("Login", use_container_width=True):
-            try:
-                res = sb.auth.sign_in_with_password({"email": email, "password": password})
-                st.session_state.session = res.session
-                st.rerun()
-            except Exception as e:
-                st.error(str(e))
+        if st.button("Login"):
+            res = sb.auth.sign_in_with_password({"email": email, "password": password})
+            st.session_state.session = res.session
+            st.rerun()
     else:
-        u = st.session_state.session.user
-        st.success(f"Logged in: {u.email}")
-        if st.button("Logout", use_container_width=True):
-            try:
-                sb.auth.sign_out()
-            except Exception:
-                pass
+        st.success("Logged in")
+        if st.button("Logout"):
+            sb.auth.sign_out()
             st.session_state.session = None
             st.rerun()
 
-require_login()
-c = auth_client()
-profile = get_profile(c)
-must_be_admin(profile)
+if st.session_state.session is None:
+    st.stop()
 
-st.caption(f"Admin: **{profile['id']}**  | role: **{profile['role']}**")
-
-# -----------------------
-# Helper queries
-# -----------------------
-def list_cycles():
-    return (
-        c.table("cycles")
-        .select("cycle_id,name,start_date,is_active,created_at")
-        .order("created_at", desc=True)
-        .execute()
-    )
-
-
-def list_sessions(cycle_id=None):
-    q = (
-        c.table("sessions")
-        .select("session_id,cycle_id,session_date,due_date,status,created_at")
-        .order("created_at", desc=True)
-    )
-    if cycle_id:
-        q = q.eq("cycle_id", cycle_id)
-    return q.execute()
-
-
-def list_active_members():
-    # Based on your schema changes mentioned in code: member_id is UUID
-    return (
-        c.table("members")
-        .select("member_id,is_active,contribution_amount,surety_id,joined_at")
-        .order("joined_at", desc=True)
-        .execute()
-    )
-
-
-def list_cycle_members(cycle_id):
-    return (
-        c.table("cycle_members")
-        .select("cycle_id,member_id,payout_position")
-        .eq("cycle_id", cycle_id)
-        .order("payout_position")
-        .execute()
-    )
-
-
-def upsert_contribution(session_id, member_id, amount, paid):
-    payload = {
-        "session_id": session_id,
-        "member_id": member_id,
-        "amount": int(amount),
-        "paid": bool(paid),
-    }
-    payload["paid_at"] = pd.Timestamp.utcnow().isoformat() if paid else None
-    return c.table("contributions").upsert(payload, on_conflict="session_id,member_id").execute()
-
-
-def upsert_foundation(session_id, member_id, amount, paid):
-    payload = {
-        "session_id": session_id,
-        "member_id": member_id,
-        "amount": int(amount),
-        "paid": bool(paid),
-    }
-    payload["paid_at"] = pd.Timestamp.utcnow().isoformat() if paid else None
-    return c.table("foundation_payments").upsert(payload, on_conflict="session_id,member_id").execute()
-
-
-def create_session_rows_for_cycle_members(session_id, cycle_id):
-    """
-    Auto-create contributions + foundation rows for all members in cycle_members.
-    Safe to run multiple times due to upsert unique constraint (session_id, member_id).
-    """
-    cm = list_cycle_members(cycle_id).data or []
-    if not cm:
-        return 0
-
-    count = 0
-    for row in cm:
-        mid = row["member_id"]
-        m = (
-            c.table("members")
-            .select("contribution_amount")
-            .eq("member_id", mid)
-            .single()
-            .execute()
-            .data
-        )
-        contrib_amt = int(m["contribution_amount"]) if m and m.get("contribution_amount") else 500
-
-        upsert_contribution(session_id, mid, contrib_amt, False)
-        upsert_foundation(session_id, mid, 500, False)
-        count += 1
-
-    return count
-
-
-# -----------------------
-# Tabs
-# -----------------------
-tabs = st.tabs(
-    [
-        "1) Approve Members",
-        "2) Cycles",
-        "3) Payout Order",
-        "4) Sessions",
-        "5) Contributions",
-        "6) Foundation",
-        "7) Close Session + Fines",
-        "8) Loans",
-        "9) Payouts",
-        "10) Reports & Settings",
-    ]
+# ------------------- Client with RLS -------------------
+client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+client.auth.set_session(
+    st.session_state.session.access_token,
+    st.session_state.session.refresh_token,
 )
 
-# 1) Approve Members
+# ------------------- Tabs -------------------
+tabs = st.tabs([
+    "Members",
+    "Current Season",
+    "Rotation",
+    "Contributions",
+    "Foundation",
+])
+
+# ===================== MEMBERS =====================
 with tabs[0]:
-    st.subheader("Approve Members")
-    r = list_active_members()
-    st.dataframe(df(r), use_container_width=True)
+    st.subheader("All Njangi Members (Legacy Registry)")
+
+    members = client.table("member_registry") \
+        .select("*") \
+        .order("legacy_member_id") \
+        .execute()
+
+    st.dataframe(df(members), use_container_width=True)
+
+    st.markdown("### Activate / Deactivate Member")
 
     col1, col2 = st.columns(2)
     with col1:
-        member_uuid = st.text_input("Member UUID (member_id) to approve")
+        mid = st.number_input("Legacy Member ID (1–17)", min_value=1, max_value=17, step=1)
     with col2:
-        active = st.selectbox("Set is_active", [True, False], index=0)
+        active = st.selectbox("Set Active", [True, False])
 
-    if st.button("Update Member Status"):
-        try:
-            c.table("members").update({"is_active": active}).eq("member_id", member_uuid).execute()
-            st.success("Member updated.")
-            st.rerun()
-        except Exception as e:
-            st.error(str(e))
-
-# 2) Cycles
-with tabs[1]:
-    st.subheader("Cycles")
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        cycle_name = st.text_input("Cycle name", value="Njangi Cycle 1")
-    with col2:
-        start_date = st.date_input("Start date")
-    with col3:
-        is_active = st.selectbox("Active?", [True, False], index=0)
-
-    if st.button("Create Cycle"):
-        try:
-            c.table("cycles").insert(
-                {
-                    "name": cycle_name,
-                    "start_date": str(start_date),
-                    "is_active": bool(is_active),
-                    "created_by": profile["id"],
-                }
-            ).execute()
-            st.success("Cycle created.")
-            st.rerun()
-        except Exception as e:
-            st.error(str(e))
-
-    st.markdown("### Existing cycles")
-    st.dataframe(df(list_cycles()), use_container_width=True)
-
-# 3) Payout Order
-with tabs[2]:
-    st.subheader("Cycle Members (Payout Order)")
-
-    cycles_df = df(list_cycles())
-    st.dataframe(cycles_df, use_container_width=True)
-
-    cycle_id = st.text_input("Cycle ID (cycle_id)")
-
-    st.markdown("### Current payout order for this cycle")
-    if cycle_id:
-        st.dataframe(df(list_cycle_members(cycle_id)), use_container_width=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        member_id = st.text_input("Member UUID to add")
-    with col2:
-        pos = st.number_input("Payout position", min_value=1, step=1, value=1)
-
-    if st.button("Add/Upsert member in payout order"):
-        try:
-            c.table("cycle_members").upsert(
-                {"cycle_id": cycle_id, "member_id": member_id, "payout_position": int(pos)},
-                on_conflict="cycle_id,member_id",
-            ).execute()
-            st.success("Saved payout order.")
-            st.rerun()
-        except Exception as e:
-            st.error(str(e))
-
-# 4) Sessions
-with tabs[3]:
-    st.subheader("Sessions")
-
-    st.markdown("### Create a session")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        cycle_id = st.text_input("Cycle ID for session", key="sess_cycle_id")
-    with col2:
-        session_date = st.date_input("Session date", key="sess_date")
-    with col3:
-        due_date = st.date_input("Due date", key="sess_due_date")
-
-    if st.button("Create Session + Auto-generate rows"):
-        try:
-            res = (
-                c.table("sessions")
-                .insert(
-                    {
-                        "cycle_id": cycle_id,
-                        "session_date": str(session_date),
-                        "due_date": str(due_date),
-                        "status": "open",
-                    }
-                )
-                .execute()
-            )
-
-            new_session_id = res.data[0]["session_id"]
-            created = create_session_rows_for_cycle_members(new_session_id, cycle_id)
-            st.success(
-                f"Session created. Generated rows for {created} members (contributions + foundation)."
-            )
-            st.rerun()
-        except Exception as e:
-            st.error(str(e))
-
-    st.markdown("### Sessions list (latest first)")
-    st.dataframe(df(list_sessions()), use_container_width=True)
-
-# 5) Contributions
-with tabs[4]:
-    st.subheader("Contributions")
-
-    session_id = st.text_input("Session ID to view/edit contributions", key="contrib_session_id")
-    if session_id:
-        r = (
-            c.table("contributions")
-            .select("*")
-            .eq("session_id", session_id)
-            .order("created_at")
+    if st.button("Update Member"):
+        client.table("member_registry") \
+            .update({"is_active": active}) \
+            .eq("legacy_member_id", int(mid)) \
             .execute()
-        )
-        st.dataframe(df(r), use_container_width=True)
+        st.success("Member updated")
+        st.rerun()
 
-    st.markdown("### Update a member contribution")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        u_session = st.text_input("Session ID", key="uc_sess")
-    with col2:
-        u_member = st.text_input("Member UUID", key="uc_member")
-    with col3:
-        u_amount = st.number_input("Amount", min_value=0, step=500, value=500, key="uc_amt")
-    with col4:
-        u_paid = st.selectbox("Paid?", [True, False], index=0, key="uc_paid")
+# ===================== CURRENT SEASON =====================
+with tabs[1]:
+    st.subheader("Current Season")
 
-    if st.button("Save contribution (upsert)"):
-        try:
-            upsert_contribution(u_session, u_member, u_amount, u_paid)
-            st.success("Contribution saved.")
-        except Exception as e:
-            st.error(str(e))
+    season = client.rpc("sql", {
+        "query": """
+        select
+            s.id as season_id,
+            s.start_date,
+            s.end_date,
+            s.status,
+            a.next_payout_index,
+            m.full_name as next_beneficiary
+        from public.sessions_legacy s
+        cross join public.app_state a
+        join public.member_registry m
+          on m.legacy_member_id = a.next_payout_index
+        where s.status = 'active'
+        limit 1;
+        """
+    }).execute()
 
-# 6) Foundation
-with tabs[5]:
+    st.dataframe(df(season), use_container_width=True)
+
+# ===================== ROTATION =====================
+with tabs[2]:
+    st.subheader("Rotation State")
+
+    state = client.table("app_state").select("*").execute()
+    st.dataframe(df(state), use_container_width=True)
+
+    st.markdown("### Advance Rotation (Bi-Weekly)")
+
+    if st.button("Advance to Next Beneficiary"):
+        client.rpc("advance_rotation").execute()
+        st.success("Rotation advanced")
+        st.rerun()
+
+# ===================== CONTRIBUTIONS =====================
+with tabs[3]:
+    st.subheader("Contributions (Current Season)")
+
+    contribs = client.table("contributions_legacy") \
+        .select("*") \
+        .order("created_at", desc=True) \
+        .execute()
+
+    st.dataframe(df(contribs), use_container_width=True)
+
+# ===================== FOUNDATION =====================
+with tabs[4]:
     st.subheader("Foundation Payments")
 
-    session_id = st.text_input("Session ID to view/edit foundation payments", key="f_session_id")
-    if session_id:
-        r = (
-            c.table("foundation_payments")
-            .select("*")
-            .eq("session_id", session_id)
-            .order("created_at")
-            .execute()
-        )
-        st.dataframe(df(r), use_container_width=True)
+    foundation = client.table("foundation_payments_legacy") \
+        .select("*") \
+        .order("created_at", desc=True) \
+        .execute()
 
-    st.markdown("### Update a member foundation payment")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        u_session = st.text_input("Session ID", key="uf_sess")
-    with col2:
-        u_member = st.text_input("Member UUID", key="uf_member")
-    with col3:
-        u_amount = st.number_input("Amount", min_value=0, step=500, value=500, key="uf_amt")
-    with col4:
-        u_paid = st.selectbox("Paid?", [True, False], index=0, key="uf_paid")
-
-    if st.button("Save foundation payment (upsert)"):
-        try:
-            upsert_foundation(u_session, u_member, u_amount, u_paid)
-            st.success("Foundation payment saved.")
-        except Exception as e:
-            st.error(str(e))
-
-# 7) Close Session + Fines
-with tabs[6]:
-    st.subheader("Close Session + Apply Late Fines")
-
-    session_id = st.text_input("Session ID to close", key="close_session_id")
-
-    if st.button("Close session + apply fines"):
-        try:
-            c.table("sessions").update({"status": "closed"}).eq("session_id", session_id).execute()
-            c.rpc("apply_late_fines", {"p_session_id": session_id}).execute()
-            st.success("Session closed and fines applied to unpaid contributions.")
-        except Exception as e:
-            st.error(str(e))
-
-    st.markdown("### View fines for a session")
-    sess = st.text_input("Session ID for fines", key="fine_sess")
-    if sess:
-        r = c.table("fines").select("*").eq("session_id", sess).order("created_at").execute()
-        st.dataframe(df(r), use_container_width=True)
-
-# 8) Loans
-with tabs[7]:
-    st.subheader("Loans")
-
-    st.markdown("### All loans")
-    r = c.table("loans").select("*").order("requested_at", desc=True).execute()
-    st.dataframe(df(r), use_container_width=True)
-
-    st.markdown("### Approve / Reject / Activate / Close")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        loan_id = st.text_input("Loan ID", key="loan_id")
-    with col2:
-        new_status = st.selectbox("New status", ["approved", "rejected", "active", "closed", "defaulted"], index=0)
-    with col3:
-        note_time = st.checkbox("Set approved_at/disbursed_at automatically?", value=True)
-
-    if st.button("Update loan status"):
-        try:
-            payload = {"status": new_status}
-            now = pd.Timestamp.utcnow().isoformat()
-
-            if note_time and new_status in ("approved", "active"):
-                payload["approved_at"] = now
-                payload["approved_by"] = profile["id"]
-            if note_time and new_status == "active":
-                payload["disbursed_at"] = now
-            if note_time and new_status == "closed":
-                payload["closed_at"] = now
-
-            c.table("loans").update(payload).eq("loan_id", loan_id).execute()
-            st.success("Loan updated.")
-            st.rerun()
-        except Exception as e:
-            st.error(str(e))
-
-    st.markdown("### Record a loan payment")
-    col1, col2 = st.columns(2)
-    with col1:
-        pay_loan_id = st.text_input("Loan ID for payment", key="pay_loan_id")
-    with col2:
-        pay_amount = st.number_input("Payment amount", min_value=1, step=100, value=100, key="pay_amt")
-
-    if st.button("Add loan payment"):
-        try:
-            c.table("loan_payments").insert(
-                {"loan_id": pay_loan_id, "amount": int(pay_amount), "confirmed_by": profile["id"]}
-            ).execute()
-            st.success("Payment recorded.")
-        except Exception as e:
-            st.error(str(e))
-
-    st.markdown("### Loan balances (principal only view)")
-    rb = c.from_("loan_balances").select("*").execute()
-    st.dataframe(df(rb), use_container_width=True)
-
-# 9) Payouts
-with tabs[8]:
-    st.subheader("Payouts")
-
-    st.markdown("### Release payout")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        p_cycle = st.text_input("Cycle ID", key="p_cycle")
-    with col2:
-        p_session = st.text_input("Session ID", key="p_session")
-    with col3:
-        p_member = st.text_input("Member UUID (receiver)", key="p_member")
-    with col4:
-        p_amount = st.number_input("Amount", min_value=1, step=500, value=500, key="p_amount")
-
-    if st.button("Release payout"):
-        try:
-            c.table("payouts").insert(
-                {
-                    "cycle_id": p_cycle,
-                    "session_id": p_session,
-                    "member_id": p_member,
-                    "amount": int(p_amount),
-                    "released_by": profile["id"],
-                }
-            ).execute()
-            st.success("Payout released.")
-        except Exception as e:
-            st.error(str(e))
-
-    st.markdown("### Payout history")
-    r = c.table("payouts").select("*").order("released_at", desc=True).execute()
-    st.dataframe(df(r), use_container_width=True)
-
-# 10) Reports & Settings
-with tabs[9]:
-    st.subheader("Reports & Settings")
-
-    st.markdown("### Session totals")
-    r = c.from_("njangi_session_total").select("*").execute()
-    st.dataframe(df(r), use_container_width=True)
-
-    st.markdown("### Foundation balance")
-    r = c.from_("foundation_balance").select("*").execute()
-    st.dataframe(df(r), use_container_width=True)
-
-    st.markdown("### App settings (late fine amount)")
-    cfg = c.table("app_config").select("*").execute()
-    st.dataframe(df(cfg), use_container_width=True)
-
-    new_fine = st.number_input("Set late_fine_amount", min_value=0, step=10, value=50)
-    if st.button("Update late fine amount"):
-        try:
-            c.table("app_config").upsert(
-                {"key": "late_fine_amount", "value": str(int(new_fine))},
-                on_conflict="key",
-            ).execute()
-            st.success("Updated.")
-            st.rerun()
-        except Exception as e:
-            st.error(str(e))
+    st.dataframe(df(foundation), use_container_width=True)
