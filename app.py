@@ -39,7 +39,7 @@ def show_api_error(e: Exception, title="Supabase error"):
     st.error(title)
     st.code(str(e))
 
-def safe_select_autosort(c, table: str, limit=500):
+def safe_select_autosort(c, table: str, limit=300):
     for col in ["created_at", "issued_at", "updated_at", "date_paid"]:
         try:
             return c.table(table).select("*").order(col, desc=True).limit(limit).execute()
@@ -47,34 +47,50 @@ def safe_select_autosort(c, table: str, limit=500):
             continue
     return c.table(table).select("*").limit(limit).execute()
 
-def load_member_choices(c):
-    resp = c.table("member_registry").select("legacy_member_id,full_name,is_active").order("legacy_member_id").execute()
-    rows = resp.data or []
+def load_registry_and_maps(c):
+    """
+    Returns:
+      - legacy_labels: dropdown like "10 — Name"
+      - legacy_label_to_legacy_id: label -> legacy_member_id (int)
+      - legacy_label_to_uuid: label -> member_uuid (uuid string) (from member_map)
+      - df_registry, df_map
+    """
+    reg = c.table("member_registry").select("legacy_member_id,full_name,is_active").order("legacy_member_id").execute().data or []
+    df_reg = pd.DataFrame(reg)
+
+    mp = c.table("member_map").select("legacy_member_id,member_id").order("legacy_member_id").execute().data or []
+    df_map = pd.DataFrame(mp)
+
+    # build lookup: legacy -> uuid
+    legacy_to_uuid = {}
+    for r in mp:
+        legacy_to_uuid[int(r["legacy_member_id"])] = r["member_id"]
+
     labels = []
-    mapping = {}
-    for r in rows:
+    label_to_legacy = {}
+    label_to_uuid = {}
+
+    for r in reg:
         mid = int(r["legacy_member_id"])
         name = r.get("full_name") or f"Member {mid}"
-        tag = "" if r.get("is_active", True) else " (inactive)"
+        active = r.get("is_active", True)
+        tag = "" if active in (None, True) else " (inactive)"
         label = f"{mid} — {name}{tag}"
         labels.append(label)
-        mapping[label] = mid
+        label_to_legacy[label] = mid
+        label_to_uuid[label] = legacy_to_uuid.get(mid)  # may be None if mapping missing
+
     if not labels:
         labels = ["No members found"]
-        mapping = {"No members found": 0}
-    return labels, mapping, pd.DataFrame(rows)
+        label_to_legacy = {"No members found": 0}
+        label_to_uuid = {"No members found": None}
 
-def infer_table_columns_from_sample(c, table: str):
-    """
-    Returns a set of columns from one existing row.
-    If table empty or select blocked, returns empty set.
-    """
+    return labels, label_to_legacy, label_to_uuid, df_reg, df_map
+
+def infer_cols(c, table: str):
     try:
-        sample_resp = c.table(table).select("*").limit(1).execute()
-        rows = sample_resp.data or []
-        if not rows:
-            return set()
-        return set(rows[0].keys())
+        sample = c.table(table).select("*").limit(1).execute().data or []
+        return set(sample[0].keys()) if sample else set()
     except Exception:
         return set()
 
@@ -94,7 +110,6 @@ with st.sidebar:
     if st.session_state.session is None:
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Password", type="password", key="login_password")
-
         if st.button("Login", use_container_width=True, key="btn_login"):
             try:
                 res = sb.auth.sign_in_with_password({"email": email, "password": password})
@@ -116,23 +131,24 @@ if st.session_state.session is None:
     st.stop()
 
 client = authed_client()
-auth_uid = st.session_state.session.user.id
-st.caption(f"auth.uid(): {auth_uid}")
 
-# -------------------- Load Members --------------------
-member_choices, member_map, df_members = load_member_choices(client)
+# -------------------- Load registry + member_map --------------------
+member_labels, label_to_legacy_id, label_to_uuid, df_registry, df_map = load_registry_and_maps(client)
 
 # -------------------- Tabs --------------------
-tabs = st.tabs(["Members", "Contributions", "Foundation", "Loans", "JSON Inserter"])
+tabs = st.tabs(["Members", "Contributions (Legacy)", "Foundation (Legacy)", "Loans (New)", "JSON Inserter"])
 
 # ===================== MEMBERS =====================
 with tabs[0]:
-    st.subheader("Member Registry")
-    st.dataframe(df_members, use_container_width=True)
+    st.subheader("member_registry")
+    st.dataframe(df_registry, use_container_width=True)
+    st.subheader("member_map (legacy -> uuid)")
+    st.dataframe(df_map, use_container_width=True)
+    st.info("Loans use member_map.member_id (UUID). Legacy tables use legacy_member_id (int).")
 
-# ===================== CONTRIBUTIONS =====================
+# ===================== CONTRIBUTIONS (LEGACY) =====================
 with tabs[1]:
-    st.subheader("Contributions (contributions_legacy)")
+    st.subheader("contributions_legacy")
 
     try:
         st.dataframe(to_df(safe_select_autosort(client, "contributions_legacy")), use_container_width=True)
@@ -140,30 +156,29 @@ with tabs[1]:
         show_api_error(e, "Could not load contributions_legacy")
 
     st.divider()
-    st.markdown("### Insert Contribution")
+    st.markdown("### Insert Contribution (legacy)")
 
-    m_label = st.selectbox("Member", member_choices, key="c_member_select")
-    member_id = member_map.get(m_label, 0)
+    mem_label = st.selectbox("Member", member_labels, key="c_member_label")
+    legacy_id = label_to_legacy_id.get(mem_label, 0)
 
-    amount = st.number_input("Amount", step=500, min_value=0, value=500, key="c_amount")
-    kind = st.selectbox("Kind", ["contribution", "paid", "other"], key="c_kind")
-    session_id = st.text_input("Session ID (optional)", key="c_session_id")
+    amount = st.number_input("amount", min_value=0, step=500, value=500, key="c_amount")
+    kind = st.selectbox("kind", ["contribution", "paid", "other"], key="c_kind")
+    session_id = st.text_input("session_id (uuid optional)", key="c_session_id")
 
-    if st.button("Insert Contribution", key="btn_insert_contrib"):
-        payload = {"member_id": int(member_id), "amount": int(amount), "kind": str(kind)}
+    if st.button("Insert Contribution", key="btn_c_insert"):
+        payload = {"member_id": int(legacy_id), "amount": int(amount), "kind": str(kind)}
         if session_id.strip():
             payload["session_id"] = session_id.strip()
-
         try:
             client.table("contributions_legacy").insert(payload).execute()
-            st.success("Contribution inserted")
+            st.success("Inserted.")
             st.rerun()
         except Exception as e:
-            show_api_error(e, "Insert failed (RLS or invalid data)")
+            show_api_error(e, "Insert failed")
 
-# ===================== FOUNDATION =====================
+# ===================== FOUNDATION (LEGACY) =====================
 with tabs[2]:
-    st.subheader("Foundation Payments (foundation_payments_legacy)")
+    st.subheader("foundation_payments_legacy")
 
     try:
         st.dataframe(to_df(safe_select_autosort(client, "foundation_payments_legacy")), use_container_width=True)
@@ -171,42 +186,42 @@ with tabs[2]:
         show_api_error(e, "Could not load foundation_payments_legacy")
 
     st.divider()
-    st.markdown("### Insert Foundation Payment")
+    st.markdown("### Insert Foundation Payment (legacy)")
 
-    f_label = st.selectbox("Member", member_choices, key="f_member_select")
-    f_member_id = member_map.get(f_label, 0)
+    mem_label_f = st.selectbox("Member", member_labels, key="f_member_label")
+    legacy_id_f = label_to_legacy_id.get(mem_label_f, 0)
 
-    amount_paid = st.number_input("Amount Paid", step=500.0, min_value=0.0, value=500.0, key="f_amount_paid")
-    amount_pending = st.number_input("Amount Pending", step=500.0, min_value=0.0, value=0.0, key="f_amount_pending")
-    status = st.selectbox("Status", ["paid", "pending", "converted"], key="f_status")
-    date_paid = st.date_input("Date Paid", key="f_date_paid")
-    converted = st.selectbox("Converted to Loan", [False, True], key="f_converted")
-    notes = st.text_input("Notes (optional)", key="f_notes")
+    amount_paid = st.number_input("amount_paid", min_value=0.0, step=500.0, value=500.0, key="f_paid")
+    amount_pending = st.number_input("amount_pending", min_value=0.0, step=500.0, value=0.0, key="f_pending")
+    status = st.selectbox("status", ["paid", "pending", "converted"], key="f_status")
+    date_paid = st.date_input("date_paid", key="f_date_paid")
+    converted_to_loan = st.selectbox("converted_to_loan", [False, True], key="f_conv")
+    notes = st.text_input("notes (optional)", key="f_notes")
 
-    if st.button("Insert Foundation Payment", key="btn_insert_foundation"):
+    if st.button("Insert Foundation Payment", key="btn_f_insert"):
         payload = {
-            "member_id": int(f_member_id),
+            "member_id": int(legacy_id_f),
             "amount_paid": float(amount_paid),
             "amount_pending": float(amount_pending),
             "status": str(status),
             "date_paid": f"{date_paid}T00:00:00Z",
-            "converted_to_loan": bool(converted),
+            "converted_to_loan": bool(converted_to_loan),
         }
         if notes.strip():
             payload["notes"] = notes.strip()
 
         try:
             client.table("foundation_payments_legacy").insert(payload).execute()
-            st.success("Foundation payment inserted")
+            st.success("Inserted.")
             st.rerun()
         except Exception as e:
-            show_api_error(e, "Insert failed (RLS or invalid data)")
+            show_api_error(e, "Insert failed")
 
-# ===================== LOANS =====================
+# ===================== LOANS (NEW) =====================
 with tabs[3]:
-    st.subheader("Loans (Surety Qualification + Insert)")
+    st.subheader("Loans (uses UUID members via member_map)")
 
-    LOANS_TABLE = "loans_legacy"  # change to "loans" if needed
+    LOANS_TABLE = "loans"  # <-- your new system loans table (uuid-based). Change to "loans_legacy" if needed.
 
     try:
         st.dataframe(to_df(safe_select_autosort(client, LOANS_TABLE, limit=200)), use_container_width=True)
@@ -216,107 +231,91 @@ with tabs[3]:
     st.divider()
     st.markdown("### Create Loan")
 
-    borrower_label = st.selectbox("Borrower", member_choices, key="loan_borrower_select")
-    borrower_id = member_map.get(borrower_label, 0)
+    borrower_label = st.selectbox("Borrower", member_labels, key="loan_borrower_label")
+    borrower_uuid = label_to_uuid.get(borrower_label)
 
-    surety_label = st.selectbox("Surety (optional)", ["(none)"] + member_choices, key="loan_surety_select")
-    surety_id = None if surety_label == "(none)" else member_map.get(surety_label, 0)
+    surety_label = st.selectbox("Surety (optional)", ["(none)"] + member_labels, key="loan_surety_label")
+    surety_uuid = None if surety_label == "(none)" else label_to_uuid.get(surety_label)
 
-    requested = st.number_input("Requested Amount", step=500.0, min_value=0.0, value=500.0, key="loan_requested")
+    requested = st.number_input("requested amount", min_value=0.0, step=500.0, value=500.0, key="loan_requested")
+    status = st.selectbox("status", ["active", "pending", "closed", "paid"], key="loan_status")
+    loan_notes = st.text_input("notes (optional)", key="loan_notes")
+
+    if borrower_uuid is None:
+        st.error("This borrower has NO member_map UUID. Fix member_map first for this legacy_member_id.")
+    if surety_label != "(none)" and surety_uuid is None:
+        st.error("This surety has NO member_map UUID. Fix member_map first.")
 
     st.markdown("### Check Eligibility (borrow_eligibility)")
-    elig_cache_key = "elig_result"
-    if elig_cache_key not in st.session_state:
-        st.session_state[elig_cache_key] = None
 
-    if st.button("Check Eligibility", key="btn_check_eligibility"):
+    if st.button("Check Eligibility", key="btn_check_elig"):
         try:
-            s_id = surety_id if surety_id else borrower_id
-            res = client.rpc(
-                "borrow_eligibility",
-                {"p_borrower_id": int(borrower_id), "p_surety_id": int(s_id), "p_requested": float(requested)},
-            ).execute()
-            rows = res.data or []
-            st.session_state[elig_cache_key] = rows[0] if rows else None
-            if st.session_state[elig_cache_key]:
-                st.success(f"Eligible: {st.session_state[elig_cache_key].get('eligible')} — {st.session_state[elig_cache_key].get('reason')}")
-                st.json(st.session_state[elig_cache_key])
-            else:
-                st.warning("No eligibility rows returned.")
+            # Try calling with UUID params (if your function supports)
+            s_uuid = surety_uuid if surety_uuid else borrower_uuid
+            res = client.rpc("borrow_eligibility", {
+                "p_borrower_id": borrower_uuid,
+                "p_surety_id": s_uuid,
+                "p_requested": float(requested),
+            }).execute()
+            st.json(res.data)
+            st.session_state["elig"] = (res.data[0] if (res.data and isinstance(res.data, list)) else None)
         except Exception as e:
-            show_api_error(e, "Eligibility check failed")
+            show_api_error(e, "Eligibility check failed (your function may be bigint-based)")
 
-    status = st.selectbox("Loan Status", ["active", "pending", "closed", "paid"], key="loan_status_select")
-    loan_notes = st.text_input("Loan Notes (optional)", key="loan_notes")
+    st.divider()
+    st.markdown("### Insert Loan (only sends columns that exist)")
 
-    st.markdown("### Insert Loan (uses your actual loans_legacy columns)")
-    cols = infer_table_columns_from_sample(client, LOANS_TABLE)
-
+    cols = infer_cols(client, LOANS_TABLE)
     if not cols:
-        st.warning(
-            f"Cannot infer columns for {LOANS_TABLE} (table empty or SELECT blocked by RLS). "
-            "Use JSON Inserter after checking loans_legacy columns in SQL."
-        )
-        st.code("SQL: SELECT column_name, data_type FROM information_schema.columns WHERE table_name='loans_legacy';")
-
-    if st.button("Insert Loan", key="btn_insert_loan"):
-        elig = st.session_state.get(elig_cache_key)
-        if elig is not None and not bool(elig.get("eligible")):
-            st.error(f"Not eligible: {elig.get('reason')}")
-            st.stop()
-
-        if borrower_id <= 0 or requested <= 0:
-            st.error("Select valid borrower and amount.")
-            st.stop()
-
-        # Map common loan column names (only set ones that exist)
-        borrower_col = pick(cols, "borrower_member_id", "borrower_id", "member_id")
-        surety_col = pick(cols, "surety_id", "surety_member_id", "guarantor_id")
+        st.warning(f"Cannot infer columns for {LOANS_TABLE} (empty table or RLS blocks select). Use JSON Inserter.")
+    else:
+        borrower_col = pick(cols, "borrower_member_id", "member_id", "borrower_id")
+        surety_col = pick(cols, "surety_id", "surety_member_id")
         principal_col = pick(cols, "principal", "loan_amount", "amount", "requested_amount")
         status_col = pick(cols, "status", "loan_status")
         notes_col = pick(cols, "notes", "note", "remark")
         issued_col = pick(cols, "issued_at", "created_at", "date_issued", "start_date")
 
-        if not borrower_col:
-            st.error(f"loans table has no borrower column I recognize. Columns: {sorted(list(cols))}")
-            st.stop()
+        if st.button("Insert Loan", key="btn_insert_loan"):
+            if borrower_uuid is None:
+                st.error("Borrower has no UUID mapping in member_map.")
+                st.stop()
+            if requested <= 0:
+                st.error("Requested must be > 0.")
+                st.stop()
 
-        payload = {borrower_col: int(borrower_id)}
+            payload = {}
+            if borrower_col:
+                payload[borrower_col] = borrower_uuid
+            if surety_col and surety_uuid:
+                payload[surety_col] = surety_uuid
+            if principal_col:
+                payload[principal_col] = float(requested)
+            if status_col:
+                payload[status_col] = str(status)
+            if notes_col and loan_notes.strip():
+                payload[notes_col] = loan_notes.strip()
+            if issued_col:
+                payload[issued_col] = pd.Timestamp.utcnow().isoformat()
 
-        if surety_col and surety_id is not None:
-            payload[surety_col] = int(surety_id)
-
-        if principal_col:
-            payload[principal_col] = float(requested)
-
-        if status_col:
-            payload[status_col] = str(status)
-
-        if notes_col and loan_notes.strip():
-            payload[notes_col] = loan_notes.strip()
-
-        # If issued column is NOT NULL, set it
-        if issued_col:
-            payload[issued_col] = pd.Timestamp.utcnow().isoformat()
-
-        try:
-            client.table(LOANS_TABLE).insert(payload).execute()
-            st.success("Loan inserted")
-            st.rerun()
-        except Exception as e:
-            show_api_error(e, "Loan insert failed (RLS or column mismatch)")
+            try:
+                client.table(LOANS_TABLE).insert(payload).execute()
+                st.success("Loan inserted.")
+                st.rerun()
+            except Exception as e:
+                show_api_error(e, "Loan insert failed (RLS or column mismatch)")
 
 # ===================== JSON INSERTER =====================
 with tabs[4]:
     st.subheader("Universal JSON Inserter")
 
-    table = st.text_input("Table name", value="contributions_legacy", key="json_table")
-    payload_text = st.text_area("JSON payload", height=200, key="json_payload")
+    table = st.text_input("table", value="contributions_legacy", key="json_table")
+    payload_text = st.text_area("payload (json)", value='{"member_id": 1, "amount": 500, "kind": "contribution"}', height=220, key="json_payload")
 
     if st.button("Run Insert", key="btn_json_insert"):
         try:
             payload = json.loads(payload_text)
             client.table(table).insert(payload).execute()
-            st.success("Insert successful")
+            st.success("Insert OK")
         except Exception as e:
             show_api_error(e, "Insert failed")
