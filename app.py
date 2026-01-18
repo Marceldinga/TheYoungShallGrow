@@ -244,4 +244,3 @@ with tabs[4]:
             st.success("Insert successful")
         except Exception as e:
             show_api_error(e, "Insert failed")
-
