@@ -6,7 +6,7 @@ from supabase import create_client
 from datetime import date, datetime, timezone, timedelta
 
 # ============================================================
-# Page + Theme (match your screenshot look)
+# Page + Theme (Nice UI / fixed colors)
 # ============================================================
 st.set_page_config(page_title="Njangi Dashboard (Legacy)", layout="wide")
 
@@ -131,7 +131,7 @@ label{ color: var(--muted) !important; font-weight: 650 !important; }
 # ============================================================
 # Secrets + Supabase
 # ============================================================
-def get_secret(key: str) -> str | None:
+def get_secret(key: str):
     try:
         return st.secrets.get(key)
     except Exception:
@@ -149,15 +149,8 @@ sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 # ============================================================
 # Helpers
 # ============================================================
-def now_iso():
-    return datetime.now(timezone.utc).isoformat()
-
 def to_df(resp):
     return pd.DataFrame(resp.data or [])
-
-def show_api_error(e: Exception, title="Supabase error"):
-    st.error(title)
-    st.code(repr(e))
 
 def authed_client():
     c = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -165,6 +158,13 @@ def authed_client():
     if sess:
         c.auth.set_session(sess.access_token, sess.refresh_token)
     return c
+
+def show_api_error(e: Exception, title="Supabase error"):
+    st.error(title)
+    st.code(repr(e))
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
 
 def fetch_one(query_builder):
     try:
@@ -212,6 +212,25 @@ def kpi_card(title, value, badge_text=None, badge_kind="accent", sub=None):
         unsafe_allow_html=True,
     )
 
+# ============================================================
+# Role / approvals (profiles table)
+# ============================================================
+def get_profile(c, user_id: str):
+    return fetch_one(c.table("profiles").select("id,role,approved,member_id").eq("id", user_id))
+
+def is_admin(profile: dict | None) -> bool:
+    if not profile:
+        return False
+    return str(profile.get("role") or "").lower() == "admin" and bool(profile.get("approved") is True)
+
+def is_member(profile: dict | None) -> bool:
+    if not profile:
+        return False
+    return str(profile.get("role") or "").lower() == "member" and bool(profile.get("approved") is True)
+
+# ============================================================
+# Load registry
+# ============================================================
 def load_member_registry(c):
     resp = c.table("member_registry").select(
         "legacy_member_id,full_name,is_active,phone,created_at"
@@ -238,21 +257,34 @@ def load_member_registry(c):
 
     return labels, label_to_legacy, label_to_name, df
 
+# ============================================================
+# KPIs helpers
+# ============================================================
 def get_app_state(c):
     return fetch_one(c.table("app_state").select("*").eq("id", 1))
 
 def sum_contribution_pot(c):
+    # pot = sum where kind='contribution'
     resp = c.table("contributions_legacy").select("amount,kind").limit(10000).execute()
     rows = resp.data or []
     pot = 0
     for r in rows:
         if (r.get("kind") or "contribution") == "contribution":
-            pot += float(r.get("amount") or 0)
+            try:
+                pot += int(r.get("amount") or 0)
+            except Exception:
+                pass
     return pot
 
 def sum_total_contributions_alltime(c):
     resp = c.table("contributions_legacy").select("amount").limit(10000).execute()
-    return sum(float(r.get("amount") or 0) for r in (resp.data or []))
+    total = 0
+    for r in (resp.data or []):
+        try:
+            total += int(r.get("amount") or 0)
+        except Exception:
+            pass
+    return total
 
 def foundation_totals(c):
     resp = c.table("foundation_payments_legacy").select("amount_paid,amount_pending").limit(10000).execute()
@@ -268,14 +300,13 @@ def loans_interest_totals(c):
         "total_interest_generated,total_interest_accumulated,unpaid_interest,status,total_due"
     ).limit(10000).execute()
 
-    rows = resp.data or []
     total_gen = 0.0
     total_acc = 0.0
     unpaid = 0.0
     active_count = 0
     active_total_due = 0.0
 
-    for r in rows:
+    for r in (resp.data or []):
         total_gen += float(r.get("total_interest_generated") or 0)
         total_acc += float(r.get("total_interest_accumulated") or 0)
         unpaid += float(r.get("unpaid_interest") or 0)
@@ -286,20 +317,55 @@ def loans_interest_totals(c):
     total_interest = total_gen if total_gen > 0 else total_acc
     return total_interest, unpaid, active_count, active_total_due
 
+def fines_totals(c):
+    # fines_legacy columns: id, member_id, member_name, amount, reason, status, paid_at, created_at, updated_at
+    resp = c.table("fines_legacy").select("amount,status").limit(10000).execute()
+    total = 0.0
+    unpaid = 0.0
+    for r in (resp.data or []):
+        amt = float(r.get("amount") or 0)
+        total += amt
+        stt = str(r.get("status") or "").lower()
+        if stt not in ("paid", "cleared", "settled"):
+            unpaid += amt
+    return total, unpaid
+
+# ============================================================
+# Borrow capacity (UPDATED: use kind='paid')
+# ============================================================
 def member_available_to_borrow(c, legacy_member_id: int):
-    resp_c = c.table("contributions_legacy").select("amount,kind,member_id").eq("member_id", legacy_member_id).limit(10000).execute()
+    # contributions counted as PAID
+    resp_c = (
+        c.table("contributions_legacy")
+        .select("amount,kind,member_id")
+        .eq("member_id", legacy_member_id)
+        .limit(10000)
+        .execute()
+    )
     contrib = 0.0
     for r in (resp_c.data or []):
-        if (r.get("kind") or "contribution") == "contribution":
+        k = (r.get("kind") or "").lower().strip()
+        if k == "paid":
             contrib += float(r.get("amount") or 0)
 
-    resp_f = c.table("foundation_payments_legacy").select("amount_paid,amount_pending,member_id").eq("member_id", legacy_member_id).limit(10000).execute()
+    # foundation = paid + pending
+    resp_f = (
+        c.table("foundation_payments_legacy")
+        .select("amount_paid,amount_pending,member_id")
+        .eq("member_id", legacy_member_id)
+        .limit(10000)
+        .execute()
+    )
     found = 0.0
     for r in (resp_f.data or []):
         found += float(r.get("amount_paid") or 0) + float(r.get("amount_pending") or 0)
 
+    # rule: available = paid_contrib + 70% foundation
     return contrib + (found * 0.70), contrib, found
 
+# ============================================================
+# Payout Option B
+# ============================================================
 def legacy_payout_option_b(c):
     st_row = get_app_state(c)
     if not st_row:
@@ -350,10 +416,6 @@ def legacy_payout_option_b(c):
         "next_payout_date": next_date,
     }
 
-def get_profile(c, user_id: str):
-    # profiles: id(uuid), role(text), approved(bool), member_id(int)
-    return fetch_one(c.table("profiles").select("id,role,approved,member_id").eq("id", user_id))
-
 # ============================================================
 # Header
 # ============================================================
@@ -376,22 +438,30 @@ st.markdown(
 st.write("")
 
 # ============================================================
-# Session
+# Auth UI (Login + Signup)
 # ============================================================
 if "session" not in st.session_state:
     st.session_state.session = None
 
-# ============================================================
-# Sidebar: Login + Signup
-# ============================================================
 with st.sidebar:
     st.markdown("### Login / Sign Up")
-    login_tab, signup_tab = st.tabs(["Login", "Sign Up"])
 
     if st.session_state.session is None:
-        with login_tab:
-            email = st.text_input("Email", key="login_email")
-            password = st.text_input("Password", type="password", key="login_password")
+        mode = st.radio("Mode", ["Login", "Sign Up"], horizontal=True)
+
+        email = st.text_input("Email", key="auth_email")
+        password = st.text_input("Password", type="password", key="auth_password")
+
+        if mode == "Sign Up":
+            st.caption("After sign up, admin must approve you in profiles (approved=true).")
+            if st.button("Create account", use_container_width=True):
+                try:
+                    sb.auth.sign_up({"email": email, "password": password})
+                    st.success("Account created. Now login.")
+                except Exception as e:
+                    show_api_error(e, "Sign up failed")
+
+        else:
             if st.button("Login", use_container_width=True, key="btn_login"):
                 try:
                     res = sb.auth.sign_in_with_password({"email": email, "password": password})
@@ -400,18 +470,9 @@ with st.sidebar:
                 except Exception as e:
                     show_api_error(e, "Login failed")
 
-        with signup_tab:
-            s_email = st.text_input("Email (new account)", key="signup_email")
-            s_password = st.text_input("Password (min 6 chars)", type="password", key="signup_password")
-            if st.button("Create account", use_container_width=True, key="btn_signup"):
-                try:
-                    res = sb.auth.sign_up({"email": s_email, "password": s_password})
-                    st.success("Account created. Now login. (Admin must approve you in profiles.)")
-                except Exception as e:
-                    show_api_error(e, "Sign up failed")
     else:
         st.success(f"Logged in: {st.session_state.session.user.email}")
-        if st.button("Logout", use_container_width=True, key="btn_logout"):
+        if st.button("Logout", use_container_width=True):
             try:
                 sb.auth.sign_out()
             except Exception:
@@ -419,31 +480,24 @@ with st.sidebar:
             st.session_state.session = None
             st.rerun()
 
-# Stop if not logged in
 if st.session_state.session is None:
     st.stop()
 
 client = authed_client()
-
-# Identity
 user_id = st.session_state.session.user.id
 user_email = st.session_state.session.user.email
+
 st.caption(f"Logged in user id: {user_id}")
 st.caption(f"Logged in email: {user_email}")
 
-# ============================================================
-# Role routing (admin vs member)
-# ============================================================
 profile = get_profile(client, user_id)
-role = (profile or {}).get("role") or "member"
-approved = bool((profile or {}).get("approved") or False)
-member_id_link = (profile or {}).get("member_id")
+role_txt = (profile or {}).get("role", "unknown")
+approved_txt = (profile or {}).get("approved", False)
 
-is_admin = (role == "admin" and approved)
-is_member = (role == "member" and approved)
+st.caption(f"Profile role: {role_txt} • approved: {approved_txt}")
 
-if not approved:
-    st.warning("Your account is not approved yet. Please contact admin to approve you in the profiles table.")
+if not (is_admin(profile) or is_member(profile)):
+    st.warning("Your account is not approved yet. Ask admin to set profiles.approved=true.")
     st.stop()
 
 # ============================================================
@@ -464,8 +518,9 @@ try:
     total_contrib_all = sum_total_contributions_alltime(client)
     f_paid, f_pending, f_total = foundation_totals(client)
     total_interest, unpaid_interest, active_loans, active_total_due = loans_interest_totals(client)
+    fines_total, fines_unpaid = fines_totals(client)
 
-    r1 = st.columns(6)
+    r1 = st.columns(7)
     with r1[0]:
         kpi_card("Current Beneficiary", f"{next_idx} — {ben_name}", badge_text="Rotation", badge_kind="accent", sub="From app_state.next_payout_index")
     with r1[1]:
@@ -478,17 +533,22 @@ try:
         kpi_card("Total Interest", money(total_interest), badge_text="Loans", badge_kind="accent", sub=f"Unpaid {money(unpaid_interest)}")
     with r1[5]:
         kpi_card("Active Loans", str(active_loans), badge_text="Due", badge_kind=("warn" if active_total_due > 0 else "green"), sub=f"Active total_due {money(active_total_due)}")
+    with r1[6]:
+        kpi_card("Fines", money(fines_total), badge_text="Unpaid", badge_kind=("warn" if fines_unpaid > 0 else "green"), sub=f"Unpaid {money(fines_unpaid)}")
+
 except Exception as e:
     show_api_error(e, "Could not load dashboard KPIs")
 
 st.write("")
-st.markdown("<div class='panel'>Tip: If KPIs fail, it’s usually RLS blocking SELECT on that table.</div>", unsafe_allow_html=True)
+st.markdown("<div class='panel'>Tip: If tables are blank or inserts fail, it’s usually RLS blocking SELECT/INSERT for that role.</div>", unsafe_allow_html=True)
 st.divider()
 
 # ============================================================
-# Tabs (admin sees all + insert forms; member sees read-only)
+# Tabs (Members read-only for members; admin gets full tabs)
 # ============================================================
-tab_names = [
+admin_mode = is_admin(profile)
+
+tab_names_admin = [
     "Members",
     "Contributions (Legacy)",
     "Foundation (Legacy)",
@@ -496,221 +556,246 @@ tab_names = [
     "Fines (Legacy)",
     "Payout (Option B)",
     "Member Borrow Capacity",
+    "JSON Inserter",
+]
+tab_names_member = [
+    "Members",
+    "Member Borrow Capacity",
 ]
 
-# Members: optional restriction (if you want members to see only their own, keep as is for now)
-tabs = st.tabs(tab_names)
+tabs = st.tabs(tab_names_admin if admin_mode else tab_names_member)
+
+# Helper to map index
+def tab_index(name: str) -> int:
+    names = tab_names_admin if admin_mode else tab_names_member
+    return names.index(name)
 
 # ===================== MEMBERS =====================
-with tabs[0]:
+with tabs[tab_index("Members")]:
     st.subheader("member_registry")
     st.dataframe(df_registry, use_container_width=True)
 
-# ===================== CONTRIBUTIONS =====================
-with tabs[1]:
+# ===================== MEMBER BORROW CAPACITY =====================
+with tabs[tab_index("Member Borrow Capacity")]:
+    st.subheader("Borrow capacity (per member - Legacy rule)")
+    st.caption("UPDATED: Contributions counted from contributions_legacy where kind='paid'.")
+
+    pick = st.selectbox("Pick member", member_labels, key="cap_member")
+    mid = int(label_to_legacy_id.get(pick, 0))
+    name = label_to_name.get(pick, "")
+
+    try:
+        avail, paid_contrib, found = member_available_to_borrow(client, mid)
+
+        top = st.columns(4)
+        with top[0]:
+            kpi_card("Member", f"{mid} — {name}", badge_text="Legacy ID", badge_kind="accent", sub="From member_registry")
+        with top[1]:
+            kpi_card("Paid Contributions", money(paid_contrib), badge_text="Counted", badge_kind="accent", sub="kind='paid'")
+        with top[2]:
+            kpi_card("Foundation", money(found), badge_text="Raw", badge_kind="accent", sub="paid + pending")
+        with top[3]:
+            kpi_card("Available to borrow", money(avail), badge_text="Rule", badge_kind="green", sub="paid + 0.70×foundation")
+
+        st.caption("Rule: available = paid_contributions + 0.70 × (foundation paid + pending)")
+    except Exception as e:
+        show_api_error(e, f"Could not compute borrow capacity for {mid} — {name}")
+
+# Stop here for members (read-only)
+if not admin_mode:
+    st.info("Member mode: read-only dashboard (no inserts).")
+    st.stop()
+
+# ===================== CONTRIBUTIONS (LEGACY) =====================
+with tabs[tab_index("Contributions (Legacy)")]:
     st.subheader("contributions_legacy")
     try:
         st.dataframe(to_df(safe_select_autosort(client, "contributions_legacy", limit=800)), use_container_width=True)
     except Exception as e:
         show_api_error(e, "Could not load contributions_legacy")
 
-    if is_admin:
-        st.divider()
-        st.markdown("### Insert Contribution (admin)")
-        mem_label = st.selectbox("Member", member_labels, key="c_member_label")
-        legacy_id = int(label_to_legacy_id.get(mem_label, 0))
-        st.caption(f"member_id (legacy): **{legacy_id}**")
+    st.divider()
+    st.markdown("### Insert Contribution (legacy)")
 
-        amount = st.number_input("amount", min_value=0, step=500, value=500, key="c_amount")
-        kind = st.selectbox("kind", ["contribution", "paid", "other"], index=0, key="c_kind")
-        session_id = st.text_input("session_id (uuid optional)", value="", key="c_session_id")
+    mem_label = st.selectbox("Member", member_labels, key="c_member_label")
+    legacy_id = int(label_to_legacy_id.get(mem_label, 0))
+    st.caption(f"member_id (legacy): **{legacy_id}**")
 
-        if st.button("Insert Contribution", use_container_width=True, key="btn_c_insert"):
-            payload = {"member_id": legacy_id, "amount": float(amount), "kind": str(kind), "created_at": now_iso(), "updated_at": now_iso()}
-            if session_id.strip():
-                payload["session_id"] = session_id.strip()
-            try:
-                client.table("contributions_legacy").insert(payload).execute()
-                st.success("Contribution inserted.")
-                st.rerun()
-            except Exception as e:
-                show_api_error(e, "Contribution insert failed (RLS or invalid data)")
-    else:
-        st.caption("Member mode: read-only")
+    amount = st.number_input("amount (int)", min_value=0, step=500, value=500, key="c_amount")
+    kind = st.selectbox("kind", ["contribution", "paid", "other"], index=0, key="c_kind")
+    session_id = st.text_input("session_id (uuid optional)", value="", key="c_session_id")
 
-# ===================== FOUNDATION =====================
-with tabs[2]:
+    if st.button("Insert Contribution", use_container_width=True, key="btn_c_insert"):
+        payload = {"member_id": legacy_id, "amount": int(amount), "kind": str(kind)}
+        if session_id.strip():
+            payload["session_id"] = session_id.strip()
+        try:
+            client.table("contributions_legacy").insert(payload).execute()
+            st.success("Contribution inserted.")
+            st.rerun()
+        except Exception as e:
+            show_api_error(e, "Contribution insert failed (RLS or invalid data)")
+
+# ===================== FOUNDATION (LEGACY) =====================
+with tabs[tab_index("Foundation (Legacy)")]:
     st.subheader("foundation_payments_legacy")
     try:
         st.dataframe(to_df(safe_select_autosort(client, "foundation_payments_legacy", limit=800)), use_container_width=True)
     except Exception as e:
         show_api_error(e, "Could not load foundation_payments_legacy")
 
-    if is_admin:
-        st.divider()
-        st.markdown("### Insert Foundation Payment (admin)")
-        mem_label_f = st.selectbox("Member", member_labels, key="f_member_label")
-        legacy_id_f = int(label_to_legacy_id.get(mem_label_f, 0))
-        st.caption(f"member_id (legacy): **{legacy_id_f}**")
+    st.divider()
+    st.markdown("### Insert Foundation Payment (legacy)")
 
-        amount_paid = st.number_input("amount_paid", min_value=0.0, step=500.0, value=500.0, key="f_paid")
-        amount_pending = st.number_input("amount_pending", min_value=0.0, step=500.0, value=0.0, key="f_pending")
-        status = st.selectbox("status", ["paid", "pending", "converted"], index=0, key="f_status")
-        date_paid = st.date_input("date_paid", key="f_date_paid")
-        converted_to_loan = st.selectbox("converted_to_loan", [False, True], index=0, key="f_conv")
-        notes_f = st.text_input("notes (optional)", value="", key="f_notes")
+    mem_label_f = st.selectbox("Member", member_labels, key="f_member_label")
+    legacy_id_f = int(label_to_legacy_id.get(mem_label_f, 0))
+    st.caption(f"member_id (legacy): **{legacy_id_f}**")
 
-        if st.button("Insert Foundation Payment", use_container_width=True, key="btn_f_insert"):
-            payload = {
-                "member_id": legacy_id_f,
-                "amount_paid": float(amount_paid),
-                "amount_pending": float(amount_pending),
-                "status": str(status),
-                "date_paid": f"{date_paid}T00:00:00Z",
-                "converted_to_loan": bool(converted_to_loan),
-                "created_at": now_iso(),
-                "updated_at": now_iso(),
-            }
-            if notes_f.strip():
-                payload["notes"] = notes_f.strip()
+    amount_paid = st.number_input("amount_paid (numeric)", min_value=0.0, step=500.0, value=500.0, key="f_paid")
+    amount_pending = st.number_input("amount_pending (numeric)", min_value=0.0, step=500.0, value=0.0, key="f_pending")
+    status = st.selectbox("status", ["paid", "pending", "converted"], index=0, key="f_status")
+    date_paid = st.date_input("date_paid", key="f_date_paid")
+    converted_to_loan = st.selectbox("converted_to_loan", [False, True], index=0, key="f_conv")
+    notes_f = st.text_input("notes (optional)", value="", key="f_notes")
 
-            try:
-                client.table("foundation_payments_legacy").insert(payload).execute()
-                st.success("Foundation payment inserted.")
-                st.rerun()
-            except Exception as e:
-                show_api_error(e, "Foundation insert failed (RLS or invalid data)")
-    else:
-        st.caption("Member mode: read-only")
+    if st.button("Insert Foundation Payment", use_container_width=True, key="btn_f_insert"):
+        payload = {
+            "member_id": legacy_id_f,
+            "amount_paid": float(amount_paid),
+            "amount_pending": float(amount_pending),
+            "status": str(status),
+            "date_paid": f"{date_paid}T00:00:00Z",
+            "converted_to_loan": bool(converted_to_loan),
+        }
+        if notes_f.strip():
+            payload["notes"] = notes_f.strip()
 
-# ===================== LOANS =====================
-with tabs[3]:
+        try:
+            client.table("foundation_payments_legacy").insert(payload).execute()
+            st.success("Foundation payment inserted.")
+            st.rerun()
+        except Exception as e:
+            show_api_error(e, "Foundation insert failed (RLS/invalid data/column mismatch)")
+
+# ===================== LOANS (LEGACY) =====================
+with tabs[tab_index("Loans (Legacy)")]:
     st.subheader("loans_legacy")
     try:
         st.dataframe(to_df(client.table("loans_legacy").select("*").order("created_at", desc=True).limit(400).execute()), use_container_width=True)
     except Exception as e:
         show_api_error(e, "Could not load loans_legacy")
 
-    if is_admin:
-        st.divider()
-        st.markdown("### Insert Loan (admin)")
+    st.divider()
+    st.markdown("### Insert Loan (loans_legacy)")
 
-        borrower_label = st.selectbox("Borrower", member_labels, key="loan_borrower_label")
-        borrower_member_id = int(label_to_legacy_id.get(borrower_label, 0))
-        borrower_name = label_to_name.get(borrower_label, "")
+    borrower_label = st.selectbox("Borrower", member_labels, key="loan_borrower_label")
+    borrower_member_id = int(label_to_legacy_id.get(borrower_label, 0))
+    borrower_name = label_to_name.get(borrower_label, "")
 
-        surety_label = st.selectbox("Surety", member_labels, key="loan_surety_label")
-        surety_member_id = int(label_to_legacy_id.get(surety_label, 0))
-        surety_name = label_to_name.get(surety_label, "")
+    surety_label = st.selectbox("Surety", member_labels, key="loan_surety_label")
+    surety_member_id = int(label_to_legacy_id.get(surety_label, 0))
+    surety_name = label_to_name.get(surety_label, "")
 
-        principal = st.number_input("principal", min_value=500.0, step=500.0, value=500.0, key="loan_principal")
-        interest_cycle_days = st.number_input("interest_cycle_days", min_value=1, value=26, step=1, key="loan_cycle_days")
-        status = st.selectbox("status", ["active", "pending", "closed", "paid"], index=0, key="loan_status")
+    principal = st.number_input("principal", min_value=500.0, step=500.0, value=500.0, key="loan_principal")
+    interest_cycle_days = st.number_input("interest_cycle_days", min_value=1, value=26, step=1, key="loan_cycle_days")
+    status = st.selectbox("status", ["active", "pending", "closed", "paid"], index=0, key="loan_status")
 
-        interest = float(principal) * 0.05
-        total_due = float(principal) + interest
-        st.info(f"Interest (5%): **{money(interest)}** • Total Due: **{money(total_due)}**")
+    interest = float(principal) * 0.05
+    total_due = float(principal) + interest
+    st.info(f"Interest (5%): **{money(interest)}** • Total Due: **{money(total_due)}**")
 
-        try:
-            b_avail, b_contrib, b_found = member_available_to_borrow(client, borrower_member_id)
-            st.markdown(
-                f"""
+    try:
+        b_avail, b_paid, b_found = member_available_to_borrow(client, borrower_member_id)
+        st.markdown(
+            f"""
 <div class="panel">
   <div style="font-weight:900;">Borrower capacity check</div>
   <div style="color:var(--muted);margin-top:4px;">
-    Contributions <b>{money(b_contrib)}</b> + 70% foundation <b>{money(b_found*0.70)}</b> = <b>{money(b_avail)}</b>
+    Paid contributions <b>{money(b_paid)}</b> + 70% foundation <b>{money(b_found*0.70)}</b> = <b>{money(b_avail)}</b>
   </div>
 </div>
 """,
-                unsafe_allow_html=True,
-            )
-            if principal > b_avail:
-                st.warning("Requested principal is higher than calculated capacity (legacy rule).")
-        except Exception:
-            pass
+            unsafe_allow_html=True,
+        )
+        if principal > b_avail:
+            st.warning("Requested principal is higher than calculated capacity (paid+foundation rule).")
+    except Exception:
+        pass
 
-        if st.button("Insert Loan", use_container_width=True, key="btn_insert_loan"):
-            now_utc = now_iso()
-            payload = {
-                "member_id": borrower_member_id,
-                "borrower_member_id": borrower_member_id,
-                "surety_member_id": surety_member_id,
-                "borrower_name": borrower_name,
-                "surety_name": surety_name,
-                "principal": float(principal),
-                "interest": float(interest),
-                "total_due": float(total_due),
-                "principal_current": float(principal),
-                "unpaid_interest": float(interest),
-                "total_interest_generated": float(interest),
-                "total_interest_accumulated": 0.0,
-                "interest_cycle_days": int(interest_cycle_days),
-                "last_interest_at": now_utc,
-                "last_interest_date": now_utc,
-                "issued_at": now_utc,
-                "created_at": now_utc,
-                "updated_at": now_utc,
-                "status": str(status),
-            }
+    if st.button("Insert Loan", use_container_width=True, key="btn_insert_loan"):
+        now_utc = now_iso()
+        payload = {
+            "member_id": borrower_member_id,
+            "borrower_member_id": borrower_member_id,
+            "surety_member_id": surety_member_id,
+            "borrower_name": borrower_name,
+            "surety_name": surety_name,
+            "principal": float(principal),
+            "interest": float(interest),
+            "total_due": float(total_due),
+            "principal_current": float(principal),
+            "unpaid_interest": float(interest),
+            "total_interest_generated": float(interest),
+            "total_interest_accumulated": 0.0,
+            "interest_cycle_days": int(interest_cycle_days),
+            "last_interest_at": now_utc,
+            "last_interest_date": now_utc,
+            "issued_at": now_utc,
+            "created_at": now_utc,
+            "status": str(status),
+        }
 
-            try:
-                client.table("loans_legacy").insert(payload).execute()
-                st.success("Loan inserted successfully.")
-                st.rerun()
-            except Exception as e:
-                show_api_error(e, "Loan insert failed (RLS/constraint/column mismatch)")
-    else:
-        st.caption("Member mode: read-only")
+        try:
+            client.table("loans_legacy").insert(payload).execute()
+            st.success("Loan inserted successfully.")
+            st.rerun()
+        except Exception as e:
+            show_api_error(e, "Loan insert failed (RLS/constraint/column mismatch)")
 
-# ===================== FINES =====================
-with tabs[4]:
+# ===================== FINES (LEGACY) =====================
+with tabs[tab_index("Fines (Legacy)")]:
     st.subheader("fines_legacy")
+
     try:
         st.dataframe(to_df(safe_select_autosort(client, "fines_legacy", limit=800)), use_container_width=True)
     except Exception as e:
         show_api_error(e, "Could not load fines_legacy")
 
-    if is_admin:
-        st.divider()
-        st.markdown("### Insert Fine (admin)")
+    st.divider()
+    st.markdown("### Insert Fine (fines_legacy)")
 
-        mem_label_fx = st.selectbox("Member", member_labels, key="fine_member_label")
-        legacy_id_fx = int(label_to_legacy_id.get(mem_label_fx, 0))
-        member_name_fx = label_to_name.get(mem_label_fx, "")
+    mem_label_x = st.selectbox("Member", member_labels, key="fine_member_label")
+    fine_member_id = int(label_to_legacy_id.get(mem_label_x, 0))
+    fine_member_name = label_to_name.get(mem_label_x, "")
 
-        fine_amount = st.number_input("amount", min_value=0.0, step=500.0, value=500.0, key="fine_amount")
-        fine_status = st.selectbox("status", ["unpaid", "paid"], index=0, key="fine_status")
-        fine_reason = st.text_input("reason (optional)", value="", key="fine_reason")
-        paid_at = st.date_input("paid_at (if paid)", key="fine_paid_at")
+    fine_amount = st.number_input("amount (numeric)", min_value=0.0, step=500.0, value=500.0, key="fine_amount")
+    fine_reason = st.text_input("reason", value="Late payment", key="fine_reason")
+    fine_status = st.selectbox("status", ["unpaid", "paid"], index=0, key="fine_status")
+    fine_paid_at = st.date_input("paid_at (optional)", key="fine_paid_at")
+    paid_at_value = None if fine_status == "unpaid" else f"{fine_paid_at}T00:00:00Z"
 
-        if st.button("Insert Fine", use_container_width=True, key="btn_fine_insert"):
-            payload = {
-                "member_id": legacy_id_fx,
-                "member_name": member_name_fx,
-                "amount": float(fine_amount),
-                "reason": fine_reason.strip() if fine_reason.strip() else None,
-                "status": str(fine_status),
-                "created_at": now_iso(),
-                "updated_at": now_iso(),
-            }
-            # only set paid_at if status=paid
-            if fine_status == "paid":
-                payload["paid_at"] = f"{paid_at}T00:00:00Z"
+    if st.button("Insert Fine", use_container_width=True, key="btn_fine_insert"):
+        payload = {
+            "member_id": fine_member_id,
+            "member_name": fine_member_name,
+            "amount": float(fine_amount),
+            "reason": str(fine_reason),
+            "status": str(fine_status),
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+        if paid_at_value:
+            payload["paid_at"] = paid_at_value
 
-            # remove None fields
-            payload = {k: v for k, v in payload.items() if v is not None}
+        try:
+            client.table("fines_legacy").insert(payload).execute()
+            st.success("Fine inserted.")
+            st.rerun()
+        except Exception as e:
+            show_api_error(e, "Fine insert failed (RLS/column mismatch)")
 
-            try:
-                client.table("fines_legacy").insert(payload).execute()
-                st.success("Fine inserted.")
-                st.rerun()
-            except Exception as e:
-                show_api_error(e, "Fine insert failed (RLS/column mismatch)")
-    else:
-        st.caption("Member mode: read-only")
-
-# ===================== PAYOUT =====================
-with tabs[5]:
+# ===================== PAYOUT (OPTION B - LEGACY) =====================
+with tabs[tab_index("Payout (Option B)")]:
     st.subheader("Payout (Option B - Legacy)")
 
     st.markdown(
@@ -744,47 +829,38 @@ with tabs[5]:
         with colB:
             st.markdown(
                 "<div class='panel'><div style='font-weight:900;'>Safety</div>"
-                "<div style='color:var(--muted);margin-top:6px;'>Only admin should run payout. It clears the pot.</div></div>",
+                "<div style='color:var(--muted);margin-top:6px;'>Run payout once per cycle. It clears the pot.</div></div>",
                 unsafe_allow_html=True
             )
     except Exception as e:
         show_api_error(e, "Could not load payout state")
 
-    if is_admin:
-        if st.button("Run Payout Now (Option B)", use_container_width=True, key="btn_run_payout_b"):
-            try:
-                receipt = legacy_payout_option_b(client)
-                st.success("Payout completed.")
-                st.json(receipt)
-                st.rerun()
-            except Exception as e:
-                show_api_error(e, "Payout failed")
-    else:
-        st.caption("Member mode: read-only (cannot run payout)")
+    if st.button("Run Payout Now (Option B)", use_container_width=True):
+        try:
+            receipt = legacy_payout_option_b(client)
+            st.success("Payout completed.")
+            st.json(receipt)
+            st.caption("If payouts_legacy insert fails (schema mismatch), payout still clears pot and advances rotation.")
+            st.rerun()
+        except Exception as e:
+            show_api_error(e, "Payout failed")
 
-# ===================== BORROW CAPACITY =====================
-with tabs[6]:
-    st.subheader("Borrow capacity (per member - Legacy rule)")
+# ===================== JSON INSERTER =====================
+with tabs[tab_index("JSON Inserter")]:
+    st.subheader("Universal JSON Inserter")
 
-    pick = st.selectbox("Pick member", member_labels, key="cap_member")
-    mid = int(label_to_legacy_id.get(pick, 0))
-    name = label_to_name.get(pick, "")
+    table = st.text_input("table", value="contributions_legacy", key="json_table")
+    payload_text = st.text_area(
+        "payload (json)",
+        value='{"member_id": 1, "amount": 500, "kind": "contribution"}',
+        height=220,
+        key="json_payload",
+    )
 
-    try:
-        avail, contrib, found = member_available_to_borrow(client, mid)
-
-        top = st.columns(4)
-        with top[0]:
-            kpi_card("Member", f"{mid} — {name}", badge_text="Legacy ID", badge_kind="accent", sub="From member_registry")
-        with top[1]:
-            kpi_card("Contributions", money(contrib), badge_text="Counted", badge_kind="accent", sub="kind='contribution'")
-        with top[2]:
-            kpi_card("Foundation", money(found), badge_text="Raw", badge_kind="accent", sub="paid + pending")
-        with top[3]:
-            kpi_card("Available to borrow", money(avail), badge_text="Rule", badge_kind="green", sub="contrib + 0.70×foundation")
-
-        st.caption("Rule: available = contributions + 0.70 × (foundation paid + pending)")
-    except Exception as e:
-        show_api_error(e, f"Could not compute borrow capacity for {mid} — {name}")
-
-st.caption("If you see blank tables, it’s usually RLS blocking SELECT. Admin should have policies for SELECT/INSERT/UPDATE.")
+    if st.button("Run Insert", use_container_width=True):
+        try:
+            payload = json.loads(payload_text)
+            client.table(table).insert(payload).execute()
+            st.success("Insert OK")
+        except Exception as e:
+            show_api_error(e, "Insert failed")
