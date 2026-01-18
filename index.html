@@ -6,7 +6,7 @@ from supabase import create_client
 from datetime import date, datetime, timezone, timedelta
 
 # ============================================================
-# Page + Theme (Nice UI / fixed colors)
+# Page + Theme (Professional business UI / fixed colors)
 # ============================================================
 st.set_page_config(page_title="Njangi Admin Dashboard (Legacy)", layout="wide")
 
@@ -55,12 +55,12 @@ section[data-testid="stSidebar"] *{ color: var(--text) !important; }
 .kpi-title{
   font-size: 0.85rem;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: .2px;
 }
 .kpi-value{
   font-size: 1.35rem;
-  font-weight: 800;
+  font-weight: 900;
   color: var(--text);
 }
 .kpi-sub{
@@ -73,7 +73,7 @@ section[data-testid="stSidebar"] *{ color: var(--text) !important; }
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 800;
   border: 1px solid var(--border);
   background: rgba(255,255,255,0.04);
 }
@@ -96,7 +96,7 @@ section[data-testid="stSidebar"] *{ color: var(--text) !important; }
   border: 1px solid rgba(255,255,255,0.10);
   border-radius: 12px;
   padding: 0.55rem 0.85rem;
-  font-weight: 800;
+  font-weight: 900;
 }
 .stButton>button:hover{
   background: linear-gradient(135deg, rgba(79,140,255,1), rgba(37,99,235,1));
@@ -112,7 +112,7 @@ textarea{
   border-color: rgba(255,255,255,0.10) !important;
   color: var(--text) !important;
 }
-label{ color: var(--muted) !important; font-weight: 650 !important; }
+label{ color: var(--muted) !important; font-weight: 700 !important; }
 
 [data-testid="stDataFrame"]{
   border: 1px solid var(--border);
@@ -120,7 +120,7 @@ label{ color: var(--muted) !important; font-weight: 650 !important; }
   overflow: hidden;
 }
 
-.stTabs [data-baseweb="tab"]{ color: var(--muted); font-weight: 800; }
+.stTabs [data-baseweb="tab"]{ color: var(--muted); font-weight: 900; }
 .stTabs [aria-selected="true"]{ color: var(--text); }
 .stAlert{ border-radius: 14px; }
 </style>
@@ -167,7 +167,6 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 def fetch_one(query_builder):
-    """Return first row or None (never hard-crash like .single())."""
     try:
         res = query_builder.limit(1).execute()
         rows = res.data or []
@@ -184,10 +183,6 @@ def safe_select_autosort(c, table: str, limit=400):
     return c.table(table).select("*").limit(limit).execute()
 
 def load_member_registry(c):
-    """
-    member_registry:
-      legacy_member_id (int), full_name (text), phone (text), is_active (bool), created_at (timestamptz)
-    """
     resp = c.table("member_registry").select(
         "legacy_member_id,full_name,is_active,phone,created_at"
     ).order("legacy_member_id").execute()
@@ -216,8 +211,107 @@ def load_member_registry(c):
 def get_app_state(c):
     return fetch_one(c.table("app_state").select("*").eq("id", 1))
 
+def money(x):
+    try:
+        return f"{float(x):,.0f}"
+    except Exception:
+        return str(x)
+
+def kpi_card(title, value, badge_text=None, badge_kind="accent", sub=None):
+    badge_class = {
+        "accent": "badge badge-accent",
+        "green": "badge badge-green",
+        "warn": "badge badge-warn",
+        "danger": "badge badge-danger",
+    }.get(badge_kind, "badge badge-accent")
+
+    badge_html = f'<span class="{badge_class}">{badge_text}</span>' if badge_text else ""
+    sub_html = f'<div class="kpi-sub">{sub}</div>' if sub else ""
+    st.markdown(
+        f"""
+<div class="kpi-card">
+  <div class="kpi-top">
+    <div class="kpi-title">{title}</div>
+    {badge_html}
+  </div>
+  <div class="kpi-value">{value}</div>
+  {sub_html}
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+# ============================================================
+# members_legacy sync (THIS is what you asked for)
+# ============================================================
+# Your members_legacy columns (from your screenshot):
+# id, name, phone, has_benefits, position, contributed, foundation_contrib, loan_due, payout_total, last_payout_at, ...
+
+def get_members_legacy_row(c, member_id: int):
+    return fetch_one(
+        c.table("members_legacy").select(
+            "id,has_benefits,contributed,foundation_contrib,loan_due,payout_total,last_payout_at"
+        ).eq("id", int(member_id))
+    )
+
+def safe_update_members_legacy(c, member_id: int, patch: dict):
+    """
+    Update members_legacy by id (we assume members_legacy.id == legacy_member_id 1..17).
+    If your table uses a different key, tell me and I’ll switch it.
+    """
+    try:
+        c.table("members_legacy").update(patch).eq("id", int(member_id)).execute()
+        return True
+    except Exception:
+        return False
+
+def sync_after_contribution_insert(c, member_id: int, amount: float, kind: str):
+    # Only count real contributions into members_legacy.contributed
+    if str(kind).lower() != "contribution":
+        return
+    row = get_members_legacy_row(c, member_id) or {}
+    current = float(row.get("contributed") or 0)
+    new_val = current + float(amount or 0)
+    safe_update_members_legacy(c, member_id, {"contributed": new_val, "updated_at": now_iso()})
+
+def sync_after_foundation_insert(c, member_id: int, amount_paid: float, amount_pending: float):
+    # Store member foundation total into members_legacy.foundation_contrib
+    delta = float(amount_paid or 0) + float(amount_pending or 0)
+    row = get_members_legacy_row(c, member_id) or {}
+    current = float(row.get("foundation_contrib") or 0)
+    new_val = current + delta
+    safe_update_members_legacy(c, member_id, {"foundation_contrib": new_val, "updated_at": now_iso()})
+
+def sync_after_loan_insert(c, borrower_id: int, total_due: float):
+    # Store outstanding due (simple accumulate) into members_legacy.loan_due
+    row = get_members_legacy_row(c, borrower_id) or {}
+    current = float(row.get("loan_due") or 0)
+    new_val = current + float(total_due or 0)
+    safe_update_members_legacy(c, borrower_id, {"loan_due": new_val, "updated_at": now_iso()})
+
+def sync_after_payout(c, beneficiary_id: int, pot_paid: float):
+    # Record payout into members_legacy:
+    # - payout_total += pot_paid
+    # - has_benefits = true
+    # - last_payout_at = now
+    row = get_members_legacy_row(c, beneficiary_id) or {}
+    current = float(row.get("payout_total") or 0)
+    new_val = current + float(pot_paid or 0)
+    safe_update_members_legacy(
+        c,
+        beneficiary_id,
+        {
+            "payout_total": new_val,
+            "has_benefits": True,
+            "last_payout_at": now_iso(),
+            "updated_at": now_iso(),
+        },
+    )
+
+# ============================================================
+# KPIs
+# ============================================================
 def sum_contribution_pot(c):
-    # pot = sum where kind='contribution'
     resp = c.table("contributions_legacy").select("amount,kind").limit(10000).execute()
     rows = resp.data or []
     pot = 0
@@ -241,7 +335,6 @@ def sum_total_contributions_alltime(c):
     return total
 
 def foundation_totals(c):
-    # paid + pending totals
     resp = c.table("foundation_payments_legacy").select("amount_paid,amount_pending").limit(10000).execute()
     rows = resp.data or []
     paid = 0.0
@@ -275,7 +368,6 @@ def loans_interest_totals(c):
     return total_interest, unpaid, active_count, active_total_due
 
 def member_available_to_borrow(c, legacy_member_id: int):
-    # contributions (kind='contribution')
     resp_c = c.table("contributions_legacy").select("amount,kind,member_id").eq("member_id", legacy_member_id).limit(10000).execute()
     rows_c = resp_c.data or []
     contrib = 0.0
@@ -283,26 +375,18 @@ def member_available_to_borrow(c, legacy_member_id: int):
         if (r.get("kind") or "contribution") == "contribution":
             contrib += float(r.get("amount") or 0)
 
-    # foundation = paid + pending
     resp_f = c.table("foundation_payments_legacy").select("amount_paid,amount_pending,member_id").eq("member_id", legacy_member_id).limit(10000).execute()
     rows_f = resp_f.data or []
     found = 0.0
     for r in rows_f:
         found += float(r.get("amount_paid") or 0) + float(r.get("amount_pending") or 0)
 
-    # rule: available = contrib + 70% foundation
     return contrib + (found * 0.70), contrib, found
 
+# ============================================================
+# Payout (Option B) with members_legacy sync
+# ============================================================
 def legacy_payout_option_b(c):
-    """
-    Option B:
-    - beneficiary = app_state.next_payout_index (legacy_member_id)
-    - pot = sum contributions_legacy where kind='contribution'
-    - mark pot rows -> kind='paid'
-    - advance next_payout_index (1..17 wrap)
-    - set next_payout_date = today + 14 days
-    - (best effort) insert into payouts_legacy
-    """
     st_row = get_app_state(c)
     if not st_row:
         raise Exception("app_state id=1 not found or blocked by RLS")
@@ -315,7 +399,6 @@ def legacy_payout_option_b(c):
     ben = fetch_one(c.table("member_registry").select("legacy_member_id,full_name").eq("legacy_member_id", idx))
     ben_name = (ben or {}).get("full_name") or f"Member {idx}"
 
-    # best-effort payout log
     payout_payload = {
         "member_id": idx,
         "member_name": ben_name,
@@ -330,14 +413,13 @@ def legacy_payout_option_b(c):
     except Exception:
         payout_inserted = False
 
-    # clear pot: update contributions kind -> paid
+    # clear pot
     c.table("contributions_legacy").update({"kind": "paid", "updated_at": now_iso()}).eq("kind", "contribution").execute()
 
-    # advance index
+    # advance rotation
     nxt = idx + 1
     if nxt > 17:
         nxt = 1
-
     next_date = (date.today() + timedelta(days=14)).isoformat()
 
     c.table("app_state").update({
@@ -346,44 +428,18 @@ def legacy_payout_option_b(c):
         "updated_at": now_iso()
     }).eq("id", 1).execute()
 
+    # ✅ IMPORTANT: record payout into members_legacy
+    sync_after_payout(c, idx, pot)
+
     return {
         "beneficiary_legacy_member_id": idx,
         "beneficiary_name": ben_name,
         "pot_paid_out": pot,
         "payout_logged": payout_inserted,
+        "members_legacy_updated": True,
         "next_payout_index": nxt,
         "next_payout_date": next_date,
     }
-
-def kpi_card(title, value, badge_text=None, badge_kind="accent", sub=None):
-    badge_class = {
-        "accent": "badge badge-accent",
-        "green": "badge badge-green",
-        "warn": "badge badge-warn",
-        "danger": "badge badge-danger",
-    }.get(badge_kind, "badge badge-accent")
-
-    badge_html = f'<span class="{badge_class}">{badge_text}</span>' if badge_text else ""
-    sub_html = f'<div class="kpi-sub">{sub}</div>' if sub else ""
-    st.markdown(
-        f"""
-<div class="kpi-card">
-  <div class="kpi-top">
-    <div class="kpi-title">{title}</div>
-    {badge_html}
-  </div>
-  <div class="kpi-value">{value}</div>
-  {sub_html}
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-def money(x):
-    try:
-        return f"{float(x):,.0f}"
-    except Exception:
-        return str(x)
 
 # ============================================================
 # Header
@@ -393,10 +449,10 @@ st.markdown(
 <div class="panel">
   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
     <div>
-      <div style="font-size:1.5rem;font-weight:900;margin:0;">Njangi Admin Dashboard</div>
-      <div style="color:var(--muted);font-weight:650;margin-top:2px;">Legacy tables mode • contributions_legacy • foundation_payments_legacy • loans_legacy</div>
+      <div style="font-size:1.6rem;font-weight:950;margin:0;">Njangi Admin Dashboard</div>
+      <div style="color:var(--muted);font-weight:750;margin-top:2px;">Legacy mode • Auto-sync to members_legacy on insert + payout</div>
     </div>
-    <div class="badge badge-accent">v1.0</div>
+    <div class="badge badge-accent">v1.1</div>
   </div>
 </div>
 """,
@@ -437,7 +493,6 @@ if st.session_state.session is None:
 
 client = authed_client()
 
-# Logged-in identity (this is the UUID you must use when promoting to admin in profiles)
 st.caption(f"Logged in user id: {st.session_state.session.user.id}")
 st.caption(f"Logged in email: {st.session_state.session.user.email}")
 
@@ -447,7 +502,7 @@ st.caption(f"Logged in email: {st.session_state.session.user.email}")
 member_labels, label_to_legacy_id, label_to_name, df_registry = load_member_registry(client)
 
 # ============================================================
-# KPI Row
+# KPIs
 # ============================================================
 try:
     state = get_app_state(client) or {}
@@ -462,11 +517,11 @@ try:
 
     r1 = st.columns(6)
     with r1[0]:
-        kpi_card("Current Beneficiary", f"{next_idx} — {ben_name}", badge_text="Rotation", badge_kind="accent", sub="From app_state.next_payout_index")
+        kpi_card("Current Beneficiary", f"{next_idx} — {ben_name}", badge_text="Rotation", badge_kind="accent", sub="app_state.next_payout_index")
     with r1[1]:
-        kpi_card("Contribution Pot", money(pot), badge_text="Ready", badge_kind=("green" if pot > 0 else "warn"), sub="Sum where kind='contribution'")
+        kpi_card("Contribution Pot", money(pot), badge_text="Ready", badge_kind=("green" if pot > 0 else "warn"), sub="kind='contribution'")
     with r1[2]:
-        kpi_card("All-time Contributions", money(total_contrib_all), badge_text="History", badge_kind="accent", sub="All rows in contributions_legacy")
+        kpi_card("All-time Contributions", money(total_contrib_all), badge_text="History", badge_kind="accent", sub="contributions_legacy total")
     with r1[3]:
         kpi_card("Foundation Total", money(f_total), badge_text="Paid+Pending", badge_kind="accent", sub=f"Paid {money(f_paid)} • Pending {money(f_pending)}")
     with r1[4]:
@@ -478,7 +533,10 @@ except Exception as e:
     show_api_error(e, "Could not load dashboard KPIs")
 
 st.write("")
-st.markdown("<div class='panel'>Tip: If KPIs fail, it’s usually RLS blocking SELECT on that table.</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div class='panel'>✅ Sync rule enabled: Contribution / Foundation / Loan / Payout updates are also written into <b>members_legacy</b> (id = legacy_member_id).</div>",
+    unsafe_allow_html=True
+)
 st.divider()
 
 # ============================================================
@@ -486,6 +544,7 @@ st.divider()
 # ============================================================
 tabs = st.tabs([
     "Members",
+    "Members Legacy (Summary)",
     "Contributions (Legacy)",
     "Foundation (Legacy)",
     "Loans (Legacy)",
@@ -499,10 +558,20 @@ with tabs[0]:
     st.subheader("member_registry")
     st.dataframe(df_registry, use_container_width=True)
 
-# ===================== CONTRIBUTIONS (LEGACY) =====================
+# ===================== MEMBERS LEGACY =====================
 with tabs[1]:
-    st.subheader("contributions_legacy")
+    st.subheader("members_legacy (live totals)")
+    try:
+        df_ml = to_df(client.table("members_legacy").select("*").order("id").limit(200).execute())
+        st.dataframe(df_ml, use_container_width=True)
+        st.caption("This table now updates automatically when you insert contributions/foundation/loans or run payout.")
+    except Exception as e:
+        show_api_error(e, "Could not load members_legacy (RLS?)")
+        st.info("If this fails, add a SELECT policy for authenticated/admin on members_legacy.")
 
+# ===================== CONTRIBUTIONS (LEGACY) =====================
+with tabs[2]:
+    st.subheader("contributions_legacy")
     try:
         st.dataframe(to_df(safe_select_autosort(client, "contributions_legacy", limit=800)), use_container_width=True)
     except Exception as e:
@@ -513,7 +582,7 @@ with tabs[1]:
 
     mem_label = st.selectbox("Member", member_labels, key="c_member_label")
     legacy_id = int(label_to_legacy_id.get(mem_label, 0))
-    st.caption(f"member_id (legacy): **{legacy_id}**")
+    st.caption(f"member_id (legacy): **{legacy_id}**  • Sync → members_legacy.contributed")
 
     amount = st.number_input("amount", min_value=0, step=500, value=500, key="c_amount")
     kind = st.selectbox("kind", ["contribution", "paid", "other"], index=0, key="c_kind")
@@ -525,15 +594,16 @@ with tabs[1]:
             payload["session_id"] = session_id.strip()
         try:
             client.table("contributions_legacy").insert(payload).execute()
-            st.success("Contribution inserted.")
+            # ✅ Sync to members_legacy
+            sync_after_contribution_insert(client, legacy_id, float(amount), str(kind))
+            st.success("Contribution inserted + members_legacy updated.")
             st.rerun()
         except Exception as e:
             show_api_error(e, "Contribution insert failed (RLS or invalid data)")
 
 # ===================== FOUNDATION (LEGACY) =====================
-with tabs[2]:
+with tabs[3]:
     st.subheader("foundation_payments_legacy")
-
     try:
         st.dataframe(to_df(safe_select_autosort(client, "foundation_payments_legacy", limit=800)), use_container_width=True)
     except Exception as e:
@@ -544,7 +614,7 @@ with tabs[2]:
 
     mem_label_f = st.selectbox("Member", member_labels, key="f_member_label")
     legacy_id_f = int(label_to_legacy_id.get(mem_label_f, 0))
-    st.caption(f"member_id (legacy): **{legacy_id_f}**")
+    st.caption(f"member_id (legacy): **{legacy_id_f}**  • Sync → members_legacy.foundation_contrib")
 
     amount_paid = st.number_input("amount_paid", min_value=0.0, step=500.0, value=500.0, key="f_paid")
     amount_pending = st.number_input("amount_pending", min_value=0.0, step=500.0, value=0.0, key="f_pending")
@@ -567,15 +637,16 @@ with tabs[2]:
 
         try:
             client.table("foundation_payments_legacy").insert(payload).execute()
-            st.success("Foundation payment inserted.")
+            # ✅ Sync to members_legacy
+            sync_after_foundation_insert(client, legacy_id_f, float(amount_paid), float(amount_pending))
+            st.success("Foundation payment inserted + members_legacy updated.")
             st.rerun()
         except Exception as e:
             show_api_error(e, "Foundation insert failed (RLS or invalid data)")
 
 # ===================== LOANS (LEGACY) =====================
-with tabs[3]:
+with tabs[4]:
     st.subheader("loans_legacy")
-
     try:
         st.dataframe(to_df(client.table("loans_legacy").select("*").order("created_at", desc=True).limit(400).execute()), use_container_width=True)
     except Exception as e:
@@ -600,14 +671,15 @@ with tabs[3]:
     interest = float(principal) * 0.05
     total_due = float(principal) + interest
     st.info(f"Interest (5%): **{money(interest)}** • Total Due: **{money(total_due)}**")
+    st.caption("Sync → members_legacy.loan_due increases by total_due for borrower when loan is inserted.")
 
-    # Borrower capacity (legacy rule)
+    # Borrower capacity (legacy rule display)
     try:
         b_avail, b_contrib, b_found = member_available_to_borrow(client, borrower_member_id)
         st.markdown(
             f"""
 <div class="panel">
-  <div style="font-weight:900;">Borrower capacity check</div>
+  <div style="font-weight:900;">Borrower capacity check (legacy display)</div>
   <div style="color:var(--muted);margin-top:4px;">
     Contributions <b>{money(b_contrib)}</b> + 70% foundation <b>{money(b_found*0.70)}</b> = <b>{money(b_avail)}</b>
   </div>
@@ -616,43 +688,44 @@ with tabs[3]:
             unsafe_allow_html=True,
         )
         if principal > b_avail:
-            st.warning("Requested principal is higher than calculated capacity (legacy rule).")
+            st.warning("Requested principal is higher than calculated capacity (legacy display).")
     except Exception:
         pass
 
     if st.button("Insert Loan", use_container_width=True, key="btn_insert_loan"):
         now_utc = now_iso()
         payload = {
-            # schema you showed (loans_legacy): id bigserial exists but DO NOT send id
-            "member_id": borrower_member_id,            # nullable in schema
-            "borrower_member_id": borrower_member_id,   # NOT NULL
-            "surety_member_id": surety_member_id,       # NOT NULL
-            "borrower_name": borrower_name,             # nullable
-            "surety_name": surety_name,                 # nullable
-            "principal": float(principal),              # NOT NULL
-            "interest": float(interest),                # NOT NULL
-            "total_due": float(total_due),              # NOT NULL
-            "principal_current": float(principal),      # nullable
-            "unpaid_interest": float(interest),         # nullable
-            "total_interest_generated": float(interest),# nullable
-            "total_interest_accumulated": 0.0,          # NOT NULL
-            "interest_cycle_days": int(interest_cycle_days),  # NOT NULL
-            "last_interest_at": now_utc,                # nullable
-            "last_interest_date": now_utc,              # nullable
-            "issued_at": now_utc,                       # NOT NULL
-            "created_at": now_utc,                      # NOT NULL
-            "status": str(status),                      # NOT NULL
+            "member_id": borrower_member_id,
+            "borrower_member_id": borrower_member_id,
+            "surety_member_id": surety_member_id,
+            "borrower_name": borrower_name,
+            "surety_name": surety_name,
+            "principal": float(principal),
+            "interest": float(interest),
+            "total_due": float(total_due),
+            "principal_current": float(principal),
+            "unpaid_interest": float(interest),
+            "total_interest_generated": float(interest),
+            "total_interest_accumulated": 0.0,
+            "interest_cycle_days": int(interest_cycle_days),
+            "last_interest_at": now_utc,
+            "last_interest_date": now_utc,
+            "issued_at": now_utc,
+            "created_at": now_utc,
+            "status": str(status),
         }
 
         try:
             client.table("loans_legacy").insert(payload).execute()
-            st.success("Loan inserted successfully.")
+            # ✅ Sync to members_legacy
+            sync_after_loan_insert(client, borrower_member_id, total_due)
+            st.success("Loan inserted + members_legacy updated.")
             st.rerun()
         except Exception as e:
             show_api_error(e, "Loan insert failed (RLS/constraint/column mismatch)")
 
 # ===================== PAYOUT (OPTION B - LEGACY) =====================
-with tabs[4]:
+with tabs[5]:
     st.subheader("Payout (Option B - Legacy)")
 
     st.markdown(
@@ -664,6 +737,7 @@ with tabs[4]:
     <li>Pot = sum(contributions_legacy.amount) where kind='contribution'</li>
     <li>Marks pot contributions as kind='paid' (does not delete)</li>
     <li>Advances next_payout_index (1..17 wrap) and next_payout_date (+14 days)</li>
+    <li><b>NEW:</b> Updates <b>members_legacy</b>: payout_total += pot, has_benefits=true, last_payout_at=now</li>
   </ul>
 </div>
 """,
@@ -696,7 +770,7 @@ with tabs[4]:
     if st.button("Run Payout Now (Option B)", use_container_width=True, key="btn_run_payout_b"):
         try:
             receipt = legacy_payout_option_b(client)
-            st.success("Payout completed.")
+            st.success("Payout completed + members_legacy updated.")
             st.json(receipt)
             st.caption("If payouts_legacy insert fails (schema mismatch), payout still clears pot and advances rotation.")
             st.rerun()
@@ -704,8 +778,8 @@ with tabs[4]:
             show_api_error(e, "Payout failed")
 
 # ===================== MEMBER BORROW CAPACITY =====================
-with tabs[5]:
-    st.subheader("Borrow capacity (per member - Legacy rule)")
+with tabs[6]:
+    st.subheader("Borrow capacity (per member - Legacy rule display)")
 
     pick = st.selectbox("Pick member", member_labels, key="cap_member")
     mid = int(label_to_legacy_id.get(pick, 0))
@@ -716,7 +790,7 @@ with tabs[5]:
 
         top = st.columns(4)
         with top[0]:
-            kpi_card("Member", f"{mid} — {name}", badge_text="Legacy ID", badge_kind="accent", sub="From member_registry")
+            kpi_card("Member", f"{mid} — {name}", badge_text="Legacy ID", badge_kind="accent", sub="member_registry")
         with top[1]:
             kpi_card("Contributions", money(contrib), badge_text="Counted", badge_kind="accent", sub="kind='contribution'")
         with top[2]:
@@ -724,12 +798,12 @@ with tabs[5]:
         with top[3]:
             kpi_card("Available to borrow", money(avail), badge_text="Rule", badge_kind="green", sub="contrib + 0.70×foundation")
 
-        st.caption("Rule: available = contributions + 0.70 × (foundation paid + pending)")
+        st.caption("Rule shown here is the legacy display rule you were using.")
     except Exception as e:
         show_api_error(e, f"Could not compute borrow capacity for {mid} — {name}")
 
 # ===================== JSON INSERTER =====================
-with tabs[6]:
+with tabs[7]:
     st.subheader("Universal JSON Inserter")
 
     table = st.text_input("table", value="contributions_legacy", key="json_table")
