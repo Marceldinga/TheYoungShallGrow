@@ -19,6 +19,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # -------------------- Page --------------------
 st.set_page_config(page_title="The Young Shall Grow — Njangi Dashboard (Legacy)", layout="wide")
 
