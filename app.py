@@ -143,16 +143,73 @@ def safe_select_autosort(c, table: str, limit=400):
     return c.table(table).select("*").limit(limit).execute()
 
 def load_member_registry(c):
-    resp = c.table("member_registry").select("legacy_member_id,full_name,is_active,phone,created_at").order("legacy_member_id").execute()
+    """
+    Robust loader for member_registry that:
+    - Works even if some columns don't exist
+    - Works even if order column doesn't exist
+    - Falls back to select('*') as last resort
+    """
+    # Try different column sets (in case your schema differs)
+    col_candidates = [
+        "legacy_member_id,full_name,is_active,phone,created_at",
+        "legacy_member_id,full_name,is_active,created_at",
+        "legacy_member_id,full_name,created_at",
+        "legacy_member_id,member_name,is_active,phone,created_at",
+        "legacy_member_id,member_name,created_at",
+        "legacy_member_id,name,is_active,phone,created_at",
+        "legacy_member_id,name,created_at",
+        "*",
+    ]
+
+    last_err = None
+    resp = None
+
+    for cols in col_candidates:
+        try:
+            q = c.table("member_registry").select(cols)
+            # Try ordering safely
+            try:
+                q = q.order("legacy_member_id")
+            except Exception:
+                pass
+            resp = q.limit(2000).execute()
+            last_err = None
+            break
+        except Exception as e:
+            last_err = e
+            continue
+
+    if resp is None:
+        # Re-raise the last error so your show_api_error can display it
+        raise last_err
+
     rows = resp.data or []
     df = pd.DataFrame(rows)
 
+    # Build labels using whichever name field exists
     labels, label_to_legacy, label_to_name = [], {}, {}
+
     for r in rows:
-        mid = int(r.get("legacy_member_id"))
-        name = (r.get("full_name") or f"Member {mid}").strip()
-        active = r.get("is_active", True)
-        tag = "" if active in (None, True) else " (inactive)"
+        mid_raw = r.get("legacy_member_id")
+        if mid_raw is None:
+            continue
+        try:
+            mid = int(mid_raw)
+        except Exception:
+            continue
+
+        name = (
+            (r.get("full_name") or "")
+            or (r.get("member_name") or "")
+            or (r.get("name") or "")
+            or f"Member {mid}"
+        )
+        name = str(name).strip()
+
+        active_val = r.get("is_active", True)
+        inactive = (active_val is False) or (str(active_val).lower() in ["false", "0", "inactive"])
+        tag = " (inactive)" if inactive else ""
+
         label = f"{mid} — {name}{tag}"
         labels.append(label)
         label_to_legacy[label] = mid
