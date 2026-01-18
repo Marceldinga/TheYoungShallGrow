@@ -440,6 +440,9 @@ if st.session_state.session is None:
     st.stop()
 
 client = authed_client()
+        st.write("Logged in user id:", st.session_state.session.user.id)
+st.write("Logged in email:", st.session_state.session.user.email)
+
 
 # ============================================================
 # Load Members
