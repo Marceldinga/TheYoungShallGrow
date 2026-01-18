@@ -13,7 +13,6 @@ st.set_page_config(page_title="Njangi Admin Dashboard (Legacy)", layout="wide")
 st.markdown(
     """
 <style>
-/* ---- Global ---- */
 :root{
   --bg:#0b1220;
   --card:#0f1b31;
@@ -34,20 +33,14 @@ st.markdown(
 h1,h2,h3{ color: var(--text); }
 p,li,span,div{ color: var(--text); }
 small, .stCaption, .stMarkdown p{ color: var(--muted) !important; }
-
-/* Hide Streamlit default header spacing a bit */
 .block-container{ padding-top: 1.2rem; padding-bottom: 2rem; }
 
-/* ---- Sidebar ---- */
 section[data-testid="stSidebar"]{
   background: rgba(15, 27, 49, 0.75);
   border-right: 1px solid var(--border);
 }
-section[data-testid="stSidebar"] *{
-  color: var(--text) !important;
-}
+section[data-testid="stSidebar"] *{ color: var(--text) !important; }
 
-/* ---- Cards ---- */
 .kpi-card{
   background: rgba(15, 27, 49, 0.75);
   border: 1px solid var(--border);
@@ -97,7 +90,6 @@ section[data-testid="stSidebar"] *{
   box-shadow: 0 10px 24px rgba(0,0,0,0.18);
 }
 
-/* Buttons */
 .stButton>button{
   background: linear-gradient(135deg, rgba(79,140,255,.95), rgba(59,130,246,.85));
   color: white;
@@ -110,11 +102,8 @@ section[data-testid="stSidebar"] *{
   background: linear-gradient(135deg, rgba(79,140,255,1), rgba(37,99,235,1));
   border-color: rgba(255,255,255,0.18);
 }
-.stButton>button:disabled{
-  opacity: 0.6;
-}
+.stButton>button:disabled{ opacity: 0.6; }
 
-/* Inputs */
 div[data-baseweb="input"] > div,
 div[data-baseweb="select"] > div,
 textarea{
@@ -125,26 +114,15 @@ textarea{
 }
 label{ color: var(--muted) !important; font-weight: 650 !important; }
 
-/* Dataframe */
 [data-testid="stDataFrame"]{
   border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
 }
 
-/* Tabs */
-.stTabs [data-baseweb="tab"]{
-  color: var(--muted);
-  font-weight: 800;
-}
-.stTabs [aria-selected="true"]{
-  color: var(--text);
-}
-
-/* Alerts */
-.stAlert{
-  border-radius: 14px;
-}
+.stTabs [data-baseweb="tab"]{ color: var(--muted); font-weight: 800; }
+.stTabs [aria-selected="true"]{ color: var(--text); }
+.stAlert{ border-radius: 14px; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -210,7 +188,10 @@ def load_member_registry(c):
     member_registry:
       legacy_member_id (int), full_name (text), phone (text), is_active (bool), created_at (timestamptz)
     """
-    resp = c.table("member_registry").select("legacy_member_id,full_name,is_active,phone,created_at").order("legacy_member_id").execute()
+    resp = c.table("member_registry").select(
+        "legacy_member_id,full_name,is_active,phone,created_at"
+    ).order("legacy_member_id").execute()
+
     rows = resp.data or []
     df = pd.DataFrame(rows)
 
@@ -236,6 +217,7 @@ def get_app_state(c):
     return fetch_one(c.table("app_state").select("*").eq("id", 1))
 
 def sum_contribution_pot(c):
+    # pot = sum where kind='contribution'
     resp = c.table("contributions_legacy").select("amount,kind").limit(10000).execute()
     rows = resp.data or []
     pot = 0
@@ -259,6 +241,7 @@ def sum_total_contributions_alltime(c):
     return total
 
 def foundation_totals(c):
+    # paid + pending totals
     resp = c.table("foundation_payments_legacy").select("amount_paid,amount_pending").limit(10000).execute()
     rows = resp.data or []
     paid = 0.0
@@ -272,12 +255,14 @@ def loans_interest_totals(c):
     resp = c.table("loans_legacy").select(
         "total_interest_generated,total_interest_accumulated,unpaid_interest,status,total_due"
     ).limit(10000).execute()
+
     rows = resp.data or []
     total_gen = 0.0
     total_acc = 0.0
     unpaid = 0.0
     active_count = 0
     active_total_due = 0.0
+
     for r in rows:
         total_gen += float(r.get("total_interest_generated") or 0)
         total_acc += float(r.get("total_interest_accumulated") or 0)
@@ -285,10 +270,12 @@ def loans_interest_totals(c):
         if str(r.get("status") or "").lower() == "active":
             active_count += 1
             active_total_due += float(r.get("total_due") or 0)
+
     total_interest = total_gen if total_gen > 0 else total_acc
     return total_interest, unpaid, active_count, active_total_due
 
 def member_available_to_borrow(c, legacy_member_id: int):
+    # contributions (kind='contribution')
     resp_c = c.table("contributions_legacy").select("amount,kind,member_id").eq("member_id", legacy_member_id).limit(10000).execute()
     rows_c = resp_c.data or []
     contrib = 0.0
@@ -296,15 +283,26 @@ def member_available_to_borrow(c, legacy_member_id: int):
         if (r.get("kind") or "contribution") == "contribution":
             contrib += float(r.get("amount") or 0)
 
+    # foundation = paid + pending
     resp_f = c.table("foundation_payments_legacy").select("amount_paid,amount_pending,member_id").eq("member_id", legacy_member_id).limit(10000).execute()
     rows_f = resp_f.data or []
     found = 0.0
     for r in rows_f:
         found += float(r.get("amount_paid") or 0) + float(r.get("amount_pending") or 0)
 
+    # rule: available = contrib + 70% foundation
     return contrib + (found * 0.70), contrib, found
 
 def legacy_payout_option_b(c):
+    """
+    Option B:
+    - beneficiary = app_state.next_payout_index (legacy_member_id)
+    - pot = sum contributions_legacy where kind='contribution'
+    - mark pot rows -> kind='paid'
+    - advance next_payout_index (1..17 wrap)
+    - set next_payout_date = today + 14 days
+    - (best effort) insert into payouts_legacy
+    """
     st_row = get_app_state(c)
     if not st_row:
         raise Exception("app_state id=1 not found or blocked by RLS")
@@ -317,6 +315,7 @@ def legacy_payout_option_b(c):
     ben = fetch_one(c.table("member_registry").select("legacy_member_id,full_name").eq("legacy_member_id", idx))
     ben_name = (ben or {}).get("full_name") or f"Member {idx}"
 
+    # best-effort payout log
     payout_payload = {
         "member_id": idx,
         "member_name": ben_name,
@@ -331,17 +330,14 @@ def legacy_payout_option_b(c):
     except Exception:
         payout_inserted = False
 
-    # clear pot
-    try:
-        c.table("contributions_legacy").update({"kind": "paid", "updated_at": now_iso()}).eq("kind", "contribution").execute()
-    except Exception as e:
-        raise Exception(f"Failed to clear pot (update contributions_legacy): {repr(e)}")
+    # clear pot: update contributions kind -> paid
+    c.table("contributions_legacy").update({"kind": "paid", "updated_at": now_iso()}).eq("kind", "contribution").execute()
 
+    # advance index
     nxt = idx + 1
     if nxt > 17:
         nxt = 1
 
-    # next date (biweekly)
     next_date = (date.today() + timedelta(days=14)).isoformat()
 
     c.table("app_state").update({
@@ -440,9 +436,10 @@ if st.session_state.session is None:
     st.stop()
 
 client = authed_client()
-        st.write("Logged in user id:", st.session_state.session.user.id)
-st.write("Logged in email:", st.session_state.session.user.email)
 
+# Logged-in identity (this is the UUID you must use when promoting to admin in profiles)
+st.caption(f"Logged in user id: {st.session_state.session.user.id}")
+st.caption(f"Logged in email: {st.session_state.session.user.email}")
 
 # ============================================================
 # Load Members
@@ -450,7 +447,7 @@ st.write("Logged in email:", st.session_state.session.user.email)
 member_labels, label_to_legacy_id, label_to_name, df_registry = load_member_registry(client)
 
 # ============================================================
-# KPI Row (Beautiful cards)
+# KPI Row
 # ============================================================
 try:
     state = get_app_state(client) or {}
@@ -473,7 +470,7 @@ try:
     with r1[3]:
         kpi_card("Foundation Total", money(f_total), badge_text="Paid+Pending", badge_kind="accent", sub=f"Paid {money(f_paid)} • Pending {money(f_pending)}")
     with r1[4]:
-        kpi_card("Total Interest", money(total_interest), badge_text="Loans", badge_kind="accent", sub=f"Unpaid interest {money(unpaid_interest)}")
+        kpi_card("Total Interest", money(total_interest), badge_text="Loans", badge_kind="accent", sub=f"Unpaid {money(unpaid_interest)}")
     with r1[5]:
         kpi_card("Active Loans", str(active_loans), badge_text="Due", badge_kind=("warn" if active_total_due > 0 else "green"), sub=f"Active total_due {money(active_total_due)}")
 
@@ -481,7 +478,7 @@ except Exception as e:
     show_api_error(e, "Could not load dashboard KPIs")
 
 st.write("")
-st.markdown("<div class='panel'>Tip: If a KPI shows error, it’s usually RLS blocking SELECT on that table.</div>", unsafe_allow_html=True)
+st.markdown("<div class='panel'>Tip: If KPIs fail, it’s usually RLS blocking SELECT on that table.</div>", unsafe_allow_html=True)
 st.divider()
 
 # ============================================================
@@ -513,6 +510,7 @@ with tabs[1]:
 
     st.divider()
     st.markdown("### Insert Contribution (legacy)")
+
     mem_label = st.selectbox("Member", member_labels, key="c_member_label")
     legacy_id = int(label_to_legacy_id.get(mem_label, 0))
     st.caption(f"member_id (legacy): **{legacy_id}**")
@@ -543,6 +541,7 @@ with tabs[2]:
 
     st.divider()
     st.markdown("### Insert Foundation Payment (legacy)")
+
     mem_label_f = st.selectbox("Member", member_labels, key="f_member_label")
     legacy_id_f = int(label_to_legacy_id.get(mem_label_f, 0))
     st.caption(f"member_id (legacy): **{legacy_id_f}**")
@@ -597,7 +596,7 @@ with tabs[3]:
     interest_cycle_days = st.number_input("interest_cycle_days", min_value=1, value=26, step=1, key="loan_cycle_days")
     status = st.selectbox("status", ["active", "pending", "closed", "paid"], index=0, key="loan_status")
 
-    # Njangi rule: 5% interest upfront
+    # Rule: 5% interest upfront
     interest = float(principal) * 0.05
     total_due = float(principal) + interest
     st.info(f"Interest (5%): **{money(interest)}** • Total Due: **{money(total_due)}**")
@@ -616,30 +615,33 @@ with tabs[3]:
 """,
             unsafe_allow_html=True,
         )
+        if principal > b_avail:
+            st.warning("Requested principal is higher than calculated capacity (legacy rule).")
     except Exception:
         pass
 
     if st.button("Insert Loan", use_container_width=True, key="btn_insert_loan"):
         now_utc = now_iso()
         payload = {
-            "member_id": borrower_member_id,
-            "borrower_member_id": borrower_member_id,
-            "surety_member_id": surety_member_id,
-            "borrower_name": borrower_name,
-            "surety_name": surety_name,
-            "principal": float(principal),
-            "interest": float(interest),
-            "total_due": float(total_due),
-            "principal_current": float(principal),
-            "unpaid_interest": float(interest),
-            "total_interest_generated": float(interest),
-            "total_interest_accumulated": 0.0,
-            "interest_cycle_days": int(interest_cycle_days),
-            "last_interest_at": now_utc,
-            "last_interest_date": now_utc,
-            "issued_at": now_utc,
-            "created_at": now_utc,
-            "status": str(status),
+            # schema you showed (loans_legacy): id bigserial exists but DO NOT send id
+            "member_id": borrower_member_id,            # nullable in schema
+            "borrower_member_id": borrower_member_id,   # NOT NULL
+            "surety_member_id": surety_member_id,       # NOT NULL
+            "borrower_name": borrower_name,             # nullable
+            "surety_name": surety_name,                 # nullable
+            "principal": float(principal),              # NOT NULL
+            "interest": float(interest),                # NOT NULL
+            "total_due": float(total_due),              # NOT NULL
+            "principal_current": float(principal),      # nullable
+            "unpaid_interest": float(interest),         # nullable
+            "total_interest_generated": float(interest),# nullable
+            "total_interest_accumulated": 0.0,          # NOT NULL
+            "interest_cycle_days": int(interest_cycle_days),  # NOT NULL
+            "last_interest_at": now_utc,                # nullable
+            "last_interest_date": now_utc,              # nullable
+            "issued_at": now_utc,                       # NOT NULL
+            "created_at": now_utc,                      # NOT NULL
+            "status": str(status),                      # NOT NULL
         }
 
         try:
@@ -674,13 +676,19 @@ with tabs[4]:
         ben = fetch_one(client.table("member_registry").select("full_name").eq("legacy_member_id", idx))
         ben_name = (ben or {}).get("full_name") or f"Member {idx}"
         pot = sum_contribution_pot(client)
+        next_dt = (state.get("next_payout_date") or "unknown")
 
         colA, colB = st.columns([2, 1])
         with colA:
             st.info(f"Next beneficiary: **{idx} — {ben_name}**")
             st.info(f"Pot ready to pay: **{money(pot)}**")
+            st.caption(f"Next payout date (from app_state): {next_dt}")
         with colB:
-            st.markdown("<div class='panel'><div style='font-weight:900;'>Safety</div><div style='color:var(--muted);margin-top:6px;'>Run payout once per cycle. It clears the pot.</div></div>", unsafe_allow_html=True)
+            st.markdown(
+                "<div class='panel'><div style='font-weight:900;'>Safety</div>"
+                "<div style='color:var(--muted);margin-top:6px;'>Run payout once per cycle. It clears the pot.</div></div>",
+                unsafe_allow_html=True
+            )
 
     except Exception as e:
         show_api_error(e, "Could not load payout state")
