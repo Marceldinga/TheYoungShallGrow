@@ -149,18 +149,31 @@ def safe_select_autosort(c, table: str, limit=400):
     return c.table(table).select("*").limit(limit).execute()
 
 def load_member_registry(c):
+    """
+    Fix for: APIError at member_registry select (RLS / missing service key).
+    - If SERVICE key exists, always use it to read member_registry.
+    - Otherwise fall back to the provided client (anon+session).
+    """
+    c_read = c
+    if SUPABASE_SERVICE_KEY:
+        try:
+            c_read = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        except Exception:
+            c_read = c
+
     resp = (
-        c.table("member_registry")
+        c_read.table("member_registry")
         .select("legacy_member_id,full_name,is_active,phone,created_at")
         .order("legacy_member_id")
         .execute()
     )
+
     rows = resp.data or []
     df = pd.DataFrame(rows)
 
     labels, label_to_legacy, label_to_name = [], {}, {}
     for r in rows:
-        mid = int(r.get("legacy_member_id"))
+        mid = int(r.get("legacy_member_id") or 0)
         name = (r.get("full_name") or f"Member {mid}").strip()
         active = r.get("is_active", True)
         tag = "" if active in (None, True) else " (inactive)"
