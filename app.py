@@ -6,21 +6,21 @@ from supabase import create_client
 from datetime import date, datetime, timezone
 from postgrest.exceptions import APIError
 
-# =============================================================================
-# Njangi Admin Dashboard (Legacy) + Member Portal (Signup/Login + Loan Requests)
-# - Members can SIGN UP + LOGIN
-# - Members (non-admin) can ONLY request a loan (no direct inserts into legacy tables)
-# - Admin can add/manage ALL data (legacy tables) + approve loan requests
-# - Improved UI appearance (colors, cards, layout)
-#
-# IMPORTANT: This app assumes you create these tables in Supabase:
-#   1) profiles
-#   2) loan_requests_legacy
-# and set RLS policies (SQL provided in-app under "Setup SQL").
-# =============================================================================
+# -------------------- Header --------------------
+st.markdown(
+    """
+<div class="nj-header">
+  <div>
+    <p class="nj-title">The Young Shall Grow — Njangi Dashboard (Legacy)</p>
+    <p class="nj-sub">Admin manages data • Members can only request loans • Clean, colorful view</p>
+  </div>
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
 # -------------------- Page --------------------
-st.set_page_config(page_title="Njangi Dashboard (Legacy)", layout="wide")
+st.set_page_config(page_title="The Young Shall Grow — Njangi Dashboard (Legacy)", layout="wide")
 
 # -------------------- CSS (Appearance) --------------------
 CUSTOM_CSS = """
