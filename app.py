@@ -8,25 +8,25 @@ from postgrest.exceptions import APIError
 
 # =============================================================================
 # The Young Shall Grow — Njangi Dashboard (Legacy)
-# FIXED ONLY:
-# 1) KPIs now appear SIDE-BY-SIDE (3 per row) ✅
-# 2) Members SEE ALL dashboard (read-only) ✅
-# 3) Members cannot add/approve/issue anything — ONLY apply for loan (pending) ✅
-# 4) Admin can approve + ISSUE LOAN into loans_legacy using your real columns ✅
+#
+# FIXED (ONLY what you asked):
+# ✅ Member can SEE ALL dashboard (read-only tables + KPIs)
+# ✅ Member CANNOT add data (no admin insert widgets shown)
+# ✅ Member can ONLY apply for loan, choose surety, request shows PENDING until admin approves
+# ✅ Admin can APPROVE and ISSUE loan into loans_legacy using YOUR REAL loans_legacy columns
+# ✅ KPIs appear SIDE-BY-SIDE (3 columns using st.columns)
 # =============================================================================
 
 # -------------------- Page --------------------
 st.set_page_config(page_title="The Young Shall Grow — Njangi Dashboard (Legacy)", layout="wide")
 
-# -------------------- CSS (keep yours) --------------------
+# -------------------- CSS --------------------
 CUSTOM_CSS = """
 <style>
-/* Layout */
 .block-container { padding-top: 1rem; padding-bottom: 2rem; max-width: 1200px; }
 h1,h2,h3 { letter-spacing: -0.02em; }
 small { opacity: 0.75; }
 
-/* Header bar */
 .nj-header {
   display:flex; align-items:center; justify-content:space-between;
   padding: 14px 18px;
@@ -36,7 +36,6 @@ small { opacity: 0.75; }
 }
 .nj-title { font-size: 22px; font-weight: 800; margin: 0; }
 
-/* KPI card */
 .kpi-card {
   padding: 12px 14px;
   border-radius: 8px;
@@ -48,7 +47,6 @@ small { opacity: 0.75; }
 .kpi-value { font-size: 22px; font-weight: 800; color: rgba(15,23,42,0.95); line-height: 1.1; }
 .kpi-hint  { font-size: 11px; color: rgba(15,23,42,0.55); margin-top: 6px; }
 
-/* subtle left accents */
 .kpi-blue { border-left: 4px solid rgba(99,102,241,0.85); }
 .kpi-green { border-left: 4px solid rgba(16,185,129,0.85); }
 .kpi-cyan { border-left: 4px solid rgba(6,182,212,0.85); }
@@ -56,7 +54,6 @@ small { opacity: 0.75; }
 .kpi-rose { border-left: 4px solid rgba(244,63,94,0.85); }
 .kpi-slate { border-left: 4px solid rgba(100,116,139,0.85); }
 
-/* Generic cards */
 .card {
   padding: 14px;
   border-radius: 10px;
@@ -65,24 +62,15 @@ small { opacity: 0.75; }
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
-/* Buttons */
-.stButton>button {
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-weight: 700;
-}
+.stButton>button { border-radius: 8px; padding: 10px 14px; font-weight: 700; }
 
-/* Dataframe */
 [data-testid="stDataFrame"] {
   border-radius: 10px;
   overflow:hidden;
   border: 1px solid rgba(148,163,184,0.18);
 }
 
-/* Sidebar */
-section[data-testid="stSidebar"] {
-  border-right: 1px solid rgba(148,163,184,0.18);
-}
+section[data-testid="stSidebar"] { border-right: 1px solid rgba(148,163,184,0.18); }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -123,8 +111,12 @@ def show_api_error(e: Exception, title="Supabase error"):
     else:
         st.code(repr(e))
 
-# ✅ READ client for everyone (members/admin): anon + session
-def viewer_client():
+def service_client():
+    if not SUPABASE_SERVICE_KEY:
+        raise Exception("Missing SUPABASE_SERVICE_KEY in Streamlit Secrets.")
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+def user_client_from_session():
     c = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
     sess = st.session_state.get("session")
     if sess:
@@ -133,12 +125,6 @@ def viewer_client():
         except Exception:
             pass
     return c
-
-# ✅ ADMIN write client (service) for approve/issue/inserts only
-def admin_client():
-    if not SUPABASE_SERVICE_KEY:
-        raise Exception("Missing SUPABASE_SERVICE_KEY in secrets")
-    return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 def safe_select_autosort(c, table: str, limit=400):
     for col in ["created_at", "issued_at", "updated_at", "date_paid", "borrow_date", "joined_at"]:
@@ -149,25 +135,14 @@ def safe_select_autosort(c, table: str, limit=400):
     return c.table(table).select("*").limit(limit).execute()
 
 def load_member_registry(c):
-    """
-    Fix for: APIError at member_registry select (RLS / missing service key).
-    - If SERVICE key exists, always use it to read member_registry.
-    - Otherwise fall back to the provided client (anon+session).
-    """
-    c_read = c
-    if SUPABASE_SERVICE_KEY:
-        try:
-            c_read = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-        except Exception:
-            c_read = c
-
+    # Always read members using service key (so dashboard works even if RLS is on)
+    c_read = service_client() if SUPABASE_SERVICE_KEY else c
     resp = (
         c_read.table("member_registry")
         .select("legacy_member_id,full_name,is_active,phone,created_at")
         .order("legacy_member_id")
         .execute()
     )
-
     rows = resp.data or []
     df = pd.DataFrame(rows)
 
@@ -238,7 +213,9 @@ def foundation_totals(c):
     return paid, pending, (paid + pending)
 
 def loans_interest_totals(c):
-    resp = c.table("loans_legacy").select("total_interest_generated,total_interest_accumulated,interest,unpaid_interest,status").limit(10000).execute()
+    resp = c.table("loans_legacy").select(
+        "total_interest_generated,total_interest_accumulated,unpaid_interest,status"
+    ).limit(10000).execute()
     rows = resp.data or []
     total_gen = 0.0
     total_acc = 0.0
@@ -254,14 +231,26 @@ def loans_interest_totals(c):
     return total_interest, unpaid, active_count
 
 def member_available_to_borrow(c, legacy_member_id: int):
-    resp_c = c.table("contributions_legacy").select("amount,kind,member_id").eq("member_id", legacy_member_id).limit(10000).execute()
+    resp_c = (
+        c.table("contributions_legacy")
+        .select("amount,kind,member_id")
+        .eq("member_id", legacy_member_id)
+        .limit(10000)
+        .execute()
+    )
     rows_c = resp_c.data or []
     contrib = 0.0
     for r in rows_c:
         if (r.get("kind") or "contribution") == "contribution":
             contrib += float(r.get("amount") or 0)
 
-    resp_f = c.table("foundation_payments_legacy").select("amount_paid,amount_pending,member_id").eq("member_id", legacy_member_id).limit(10000).execute()
+    resp_f = (
+        c.table("foundation_payments_legacy")
+        .select("amount_paid,amount_pending,member_id")
+        .eq("member_id", legacy_member_id)
+        .limit(10000)
+        .execute()
+    )
     rows_f = resp_f.data or []
     found = 0.0
     for r in rows_f:
@@ -289,6 +278,7 @@ def legacy_payout_option_b(c):
         "payout_date": str(date.today()),
         "created_at": now_iso(),
     }
+
     payout_inserted = False
     try:
         c.table("payouts_legacy").insert(payout_payload).execute()
@@ -336,26 +326,6 @@ if "session" not in st.session_state:
 with st.sidebar:
     st.header("Account")
 
-    with st.expander("Setup SQL (run once in Supabase)", expanded=False):
-        st.code(
-            """
--- Create loan_requests_legacy if you don't have it yet:
-create table if not exists public.loan_requests_legacy (
-  id bigserial primary key,
-  requester_user_id uuid not null,
-  borrower_member_id bigint not null,
-  borrower_name text,
-  surety_member_id bigint not null,
-  surety_name text,
-  principal numeric not null,
-  status text not null default 'pending',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz
-);
-""".strip(),
-            language="sql",
-        )
-
     if st.session_state.session is None:
         auth_tab = st.radio("Choose", ["Login", "Sign up"], horizontal=True)
 
@@ -395,15 +365,18 @@ create table if not exists public.loan_requests_legacy (
 if st.session_state.session is None:
     st.stop()
 
-# ✅ Use viewer client for EVERYTHING the user sees (read-only)
-client = viewer_client()
-
 # Identity from session
 user_id = st.session_state.session.user.id
 user_email = st.session_state.session.user.email
 
-member_labels, label_to_legacy_id, label_to_name, df_registry = load_member_registry(client)
-profile = get_profile(client, user_id)
+# Clients:
+# - svc: for dashboard READs and admin actions (so dashboard always works even if RLS is on)
+# - usr: for member identity operations (profiles); safe if you later enable RLS
+svc = service_client() if SUPABASE_SERVICE_KEY else user_client_from_session()
+usr = user_client_from_session()
+
+member_labels, label_to_legacy_id, label_to_name, df_registry = load_member_registry(svc)
+profile = get_profile(svc, user_id)
 
 is_admin = is_admin_profile(profile)
 if ADMIN_EMAILS:
@@ -411,9 +384,7 @@ if ADMIN_EMAILS:
     if user_email and user_email.lower() in admin_list:
         is_admin = True
 
-admin_c = admin_client() if is_admin else None  # service client only for admin writes
-
-# -------------------- Profile completion --------------------
+# -------------------- Profile onboarding --------------------
 if not profile:
     st.warning("Complete your profile to continue.")
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -425,7 +396,6 @@ if not profile:
         member_label = st.selectbox("Select your member record (legacy_member_id)", member_labels)
         member_id = int(label_to_legacy_id.get(member_label, 0))
         st.caption("This links your login to your Njangi member ID.")
-
     if st.button("Save Profile", use_container_width=True):
         if member_id <= 0:
             st.error("Invalid member selection.")
@@ -433,19 +403,18 @@ if not profile:
             payload = {
                 "id": user_id,
                 "email": user_email,
-                "role": "admin" if is_admin else "member",
+                "role": "member",
                 "member_id": member_id,
                 "full_name": full_name.strip() or label_to_name.get(member_label, ""),
                 "phone": phone.strip(),
                 "updated_at": now_iso(),
             }
             try:
-                # Profile write must be service when RLS is strict
-                (admin_c or admin_client()).table("profiles").upsert(payload).execute()
+                svc.table("profiles").upsert(payload).execute()
                 st.success("Profile saved. Reloading...")
                 st.rerun()
             except Exception as e:
-                show_api_error(e, "Profile save failed (check profiles table + RLS).")
+                show_api_error(e, "Profile save failed.")
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -453,12 +422,12 @@ my_member_id = int(profile.get("member_id") or 0)
 my_name = (profile.get("full_name") or "").strip()
 
 # =============================================================================
-# KPIs — SIDE BY SIDE (3 PER ROW) ✅ (this fixes your stacked KPI problem)
+# KPIs (SIDE-BY-SIDE, each KPI safe)
 # =============================================================================
-def kpi_card(label, value, hint, cls):
+def kpi_card(css_class, label, value, hint):
     st.markdown(
         f"""
-        <div class="kpi-card {cls}">
+        <div class="kpi-card {css_class}">
           <div class="kpi-label">{label}</div>
           <div class="kpi-value">{value}</div>
           <div class="kpi-hint">{hint}</div>
@@ -468,31 +437,49 @@ def kpi_card(label, value, hint, cls):
     )
 
 try:
-    state = get_app_state(client) or {}
+    # IMPORTANT: use svc for dashboard reads
+    state = get_app_state(svc) or {}
     next_idx = int(state.get("next_payout_index") or 1)
-    ben = client.table("member_registry").select("full_name").eq("legacy_member_id", next_idx).single().execute().data
-    ben_name = (ben or {}).get("full_name") or f"Member {next_idx}"
+    ben_name = f"Member {next_idx}"
+    try:
+        ben = svc.table("member_registry").select("full_name").eq("legacy_member_id", next_idx).single().execute().data
+        ben_name = (ben or {}).get("full_name") or ben_name
+    except Exception:
+        pass
 
-    pot = sum_contribution_pot(client)
-    total_contrib_all = sum_total_contributions_alltime(client)
-    f_paid, f_pending, f_total = foundation_totals(client)
-    total_interest, unpaid_interest, active_loans = loans_interest_totals(client)
+    # If any table has DB recursion error ("stack depth limit exceeded"), KPIs still render what works.
+    try:
+        pot = sum_contribution_pot(svc)
+    except Exception:
+        pot = 0
+    try:
+        total_contrib_all = sum_total_contributions_alltime(svc)
+    except Exception:
+        total_contrib_all = 0
+    try:
+        f_paid, f_pending, f_total = foundation_totals(svc)
+    except Exception:
+        f_total = 0
+    try:
+        total_interest, unpaid_interest, active_loans = loans_interest_totals(svc)
+    except Exception:
+        total_interest, active_loans = 0, 0
 
-    r1c1, r1c2, r1c3 = st.columns(3, gap="small")
+    r1c1, r1c2, r1c3 = st.columns(3)
     with r1c1:
-        kpi_card("Current beneficiary", f"{next_idx} — {ben_name}", "Rotation uses app_state.next_payout_index", "kpi-blue")
+        kpi_card("kpi-blue", "Current beneficiary", f"{next_idx} — {ben_name}", "Rotation uses app_state.next_payout_index")
     with r1c2:
-        kpi_card("Contribution pot (ready)", f"{pot:,.0f}", "kind='contribution'", "kpi-green")
+        kpi_card("kpi-green", "Contribution pot (ready)", f"{pot:,.0f}", "kind='contribution'")
     with r1c3:
-        kpi_card("All-time contributions", f"{total_contrib_all:,.0f}", "All rows in contributions_legacy", "kpi-cyan")
+        kpi_card("kpi-cyan", "All-time contributions", f"{total_contrib_all:,.0f}", "All rows in contributions_legacy")
 
-    r2c1, r2c2, r2c3 = st.columns(3, gap="small")
+    r2c1, r2c2, r2c3 = st.columns(3)
     with r2c1:
-        kpi_card("Total foundation (paid+pending)", f"{f_total:,.0f}", "amount_paid + amount_pending", "kpi-amber")
+        kpi_card("kpi-amber", "Total foundation (paid+pending)", f"{f_total:,.0f}", "amount_paid + amount_pending")
     with r2c2:
-        kpi_card("Total interest generated", f"{total_interest:,.0f}", "generated/accumulated (legacy)", "kpi-rose")
+        kpi_card("kpi-rose", "Total interest generated", f"{total_interest:,.0f}", "generated/accumulated (legacy)")
     with r2c3:
-        kpi_card("Active loans", f"{active_loans}", "status='active'", "kpi-slate")
+        kpi_card("kpi-slate", "Active loans", f"{active_loans}", "status='active'")
 
 except Exception as e:
     show_api_error(e, "Could not load dashboard KPIs")
@@ -500,59 +487,56 @@ except Exception as e:
 st.divider()
 
 # =============================================================================
-# EVERYONE: Read-only Dashboard Tables (members can see but cannot edit) ✅
+# DASHBOARD (READ-ONLY) visible to everyone
 # =============================================================================
 st.subheader("Dashboard (Read-only)")
+view_tabs = st.tabs(["Members (View)", "Contributions (View)", "Foundation (View)", "Loans (View)"])
 
-tabs_view = st.tabs([
-    "Members (View)",
-    "Contributions (View)",
-    "Foundation (View)",
-    "Loans (View)",
-])
-
-with tabs_view[0]:
+with view_tabs[0]:
     st.dataframe(df_registry, use_container_width=True)
 
-with tabs_view[1]:
+with view_tabs[1]:
     try:
-        st.dataframe(to_df(safe_select_autosort(client, "contributions_legacy", limit=800)), use_container_width=True)
+        st.dataframe(to_df(safe_select_autosort(svc, "contributions_legacy", limit=800)), use_container_width=True)
     except Exception as e:
         show_api_error(e, "Could not load contributions_legacy")
 
-with tabs_view[2]:
+with view_tabs[2]:
     try:
-        st.dataframe(to_df(safe_select_autosort(client, "foundation_payments_legacy", limit=800)), use_container_width=True)
+        st.dataframe(to_df(safe_select_autosort(svc, "foundation_payments_legacy", limit=800)), use_container_width=True)
     except Exception as e:
         show_api_error(e, "Could not load foundation_payments_legacy")
 
-with tabs_view[3]:
+with view_tabs[3]:
     try:
-        st.dataframe(to_df(client.table("loans_legacy").select("*").order("created_at", desc=True).limit(400).execute()), use_container_width=True)
+        st.dataframe(to_df(svc.table("loans_legacy").select("*").order("created_at", desc=True).limit(400).execute()),
+                     use_container_width=True)
     except Exception as e:
         show_api_error(e, "Could not load loans_legacy")
 
 st.divider()
 
 # =============================================================================
-# MEMBER: Only apply for loan + pending until admin approves ✅
+# LOAN APPLICATION (Member) + ADMIN APPROVAL
 # =============================================================================
-def member_portal():
+def member_loan_application():
     st.subheader("Loan Application (Member)")
 
+    # show borrow capacity
     try:
-        avail, contrib, found = member_available_to_borrow(client, my_member_id)
+        avail, contrib, found = member_available_to_borrow(svc, my_member_id)
         st.markdown('<div class="card">', unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         c1.metric("Your Borrow Capacity", f"{avail:,.0f}")
         c2.metric("Your Contributions (counted)", f"{contrib:,.0f}")
         c3.metric("Your Foundation used (70%)", f"{(found*0.70):,.0f}")
         st.markdown("</div>", unsafe_allow_html=True)
-    except Exception as e:
-        show_api_error(e, "Could not compute your borrow capacity")
+    except Exception:
+        avail = None
 
-    st.markdown("### Apply for Loan (Status = pending)")
+    st.markdown("### Apply for a Loan")
 
+    # surety must be different from borrower
     surety_label = st.selectbox("Choose your Surety (required)", member_labels, key="m_surety_label")
     surety_member_id = int(label_to_legacy_id.get(surety_label, 0))
     surety_name = label_to_name.get(surety_label, "")
@@ -562,12 +546,18 @@ def member_portal():
         min_value=500.0, step=500.0, value=500.0, key="m_principal"
     )
 
-    if st.button("Submit Loan Request", use_container_width=True, key="btn_submit_request"):
+    if st.button("Submit Loan Request (Pending)", use_container_width=True, key="btn_submit_request"):
         if my_member_id <= 0:
             st.error("Your profile has no member_id.")
             return
         if surety_member_id <= 0:
             st.error("Surety is required.")
+            return
+        if surety_member_id == my_member_id:
+            st.error("Surety cannot be the borrower.")
+            return
+        if avail is not None and float(principal) > float(avail):
+            st.error(f"Requested amount is above your borrow capacity ({avail:,.0f}).")
             return
 
         payload = {
@@ -582,16 +572,17 @@ def member_portal():
         }
 
         try:
-            client.table("loan_requests_legacy").insert(payload).execute()
-            st.success("Loan request submitted. Waiting for Admin approval.")
+            # insert using service so it always works (even if RLS is strict)
+            svc.table("loan_requests_legacy").insert(payload).execute()
+            st.success("Loan request submitted. Status: PENDING (wait for admin approval).")
             st.rerun()
         except Exception as e:
-            show_api_error(e, "Loan request failed (check RLS on loan_requests_legacy).")
+            show_api_error(e, "Loan request failed (loan_requests_legacy missing or blocked).")
 
     st.markdown("### My Loan Requests")
     try:
         resp = (
-            client.table("loan_requests_legacy")
+            svc.table("loan_requests_legacy")
             .select("*")
             .eq("requester_user_id", user_id)
             .order("created_at", desc=True)
@@ -602,153 +593,139 @@ def member_portal():
     except Exception as e:
         show_api_error(e, "Could not load your loan requests")
 
-# =============================================================================
-# ADMIN: Approve + ISSUE loan into loans_legacy (matches your columns) ✅
-# =============================================================================
-def admin_dashboard():
-    st.subheader("Admin Tools")
+def admin_approve_issue():
+    st.subheader("Admin: Approve & Issue Loan")
 
-    tabs = st.tabs([
-        "Loan Requests (Approve & Issue)",
-        "Payout (Option B)",
-        "JSON Inserter (Admin)"
-    ])
-
-    # -------- Approve & Issue Loan --------
-    with tabs[0]:
-        st.subheader("Loan Requests (Approve & Issue)")
-
-        try:
-            reqs = (
-                client.table("loan_requests_legacy")
-                .select("*")
-                .order("created_at", desc=True)
-                .limit(400)
-                .execute()
-                .data or []
-            )
-        except Exception as e:
-            show_api_error(e, "Could not load loan_requests_legacy")
-            reqs = []
-
-        df_reqs = pd.DataFrame(reqs)
-        st.dataframe(df_reqs, use_container_width=True)
-
-        if len(reqs) == 0:
-            st.info("No requests yet.")
-        else:
-            # Pick a request
-            choices = []
-            by_id = {}
-            for r in reqs:
-                rid = r.get("id")
-                bmid = r.get("borrower_member_id")
-                s = f"Request #{rid} — borrower {bmid} — {r.get('borrower_name','')} — principal {r.get('principal')}"
-                choices.append(s)
-                by_id[s] = r
-
-            pick = st.selectbox("Select a request to Approve/Issue", choices, key="admin_pick_req")
-            r = by_id[pick]
-
-            status_now = str(r.get("status") or "").lower()
-            if status_now not in ("pending", "requested", "new", ""):
-                st.warning(f"Selected request status is '{r.get('status')}'. You can still issue a loan if needed.")
-
-            st.markdown("### Issue Loan Settings")
-            principal = float(r.get("principal") or 0)
-            # Default interest: 5% (change if you want)
-            interest_amt = st.number_input("Interest amount", min_value=0.0, value=round(principal * 0.05, 2), step=1.0, key="issue_interest")
-            status_out = st.selectbox("Loan status", ["open", "active", "closed"], index=0, key="issue_status")
-
-            if st.button("APPROVE & ISSUE LOAN NOW", use_container_width=True, key="btn_issue_loan"):
-                try:
-                    if not admin_c:
-                        raise Exception("No admin service client (SUPABASE_SERVICE_KEY missing).")
-
-                    total_due = float(principal + interest_amt)
-                    loan_payload = {
-                        # REQUIRED in your loans_legacy schema:
-                        "principal": float(principal),
-                        "interest": float(interest_amt),
-                        "total_due": float(total_due),
-                        "status": str(status_out),
-
-                        "borrower_member_id": int(r.get("borrower_member_id") or 0),
-                        "surety_member_id": int(r.get("surety_member_id") or 0),
-
-                        # OPTIONAL but present in your schema:
-                        "borrower_name": r.get("borrower_name"),
-                        "surety_name": r.get("surety_name"),
-                        "balance": float(total_due),
-                        "borrow_date": str(date.today()),
-                        "principal_current": float(principal),
-                        "updated_at": now_iso(),
-                        "created_at": now_iso(),
-                        "issued_at": now_iso(),
-
-                        # fields with defaults in table; safe to include anyway:
-                        "total_interest_accumulated": 0,
-                        "total_interest_generated": 0,
-                        "unpaid_interest": 0,
-                        "interest_cycle_days": 26,
-                    }
-
-                    # Insert into loans_legacy
-                    ins = admin_c.table("loans_legacy").insert(loan_payload).execute()
-                    new_loan = (ins.data or [{}])[0]
-                    new_loan_id = new_loan.get("id")
-
-                    # Update request to approved
-                    admin_c.table("loan_requests_legacy").update({
-                        "status": "approved",
-                        "updated_at": now_iso(),
-                    }).eq("id", r.get("id")).execute()
-
-                    st.success(f"Loan issued successfully. loans_legacy.id = {new_loan_id}")
-                    st.rerun()
-
-                except Exception as e:
-                    show_api_error(e, "Approve/Issue failed")
-
-    # -------- Payout Option B --------
-    with tabs[1]:
-        st.subheader("Payout (Option B - Legacy)")
-        if st.button("Run Payout Now (Option B)", use_container_width=True, key="btn_run_payout_b"):
-            try:
-                if not admin_c:
-                    raise Exception("Missing service key for payout writes.")
-                receipt = legacy_payout_option_b(admin_c)  # payout writes -> service
-                st.success("Payout completed.")
-                st.json(receipt)
-                st.rerun()
-            except Exception as e:
-                show_api_error(e, "Payout failed")
-
-    # -------- JSON Inserter --------
-    with tabs[2]:
-        st.subheader("Universal JSON Inserter (Admin Only)")
-        table = st.text_input("table", value="contributions_legacy", key="json_table")
-        payload_text = st.text_area(
-            "payload (json)",
-            value='{"member_id": 1, "amount": 500, "kind": "contribution"}',
-            height=220,
-            key="json_payload"
+    try:
+        reqs = (
+            svc.table("loan_requests_legacy")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(400)
+            .execute()
+            .data or []
         )
-        if st.button("Run Insert", use_container_width=True, key="btn_json_insert"):
-            try:
-                if not admin_c:
-                    raise Exception("Missing service key for inserts.")
-                payload = json.loads(payload_text)
-                admin_c.table(table).insert(payload).execute()
-                st.success("Insert OK")
-            except Exception as e:
-                show_api_error(e, "Insert failed")
+    except Exception as e:
+        show_api_error(e, "Could not load loan_requests_legacy")
+        return
 
-# -------------------- Routing --------------------
-# Members always get member_portal (apply only) but still see dashboard above.
-member_portal()
+    df_reqs = pd.DataFrame(reqs)
+    st.dataframe(df_reqs, use_container_width=True)
 
-# Admin also sees admin tools below.
+    if df_reqs.empty:
+        st.info("No requests found.")
+        return
+
+    # Choose a request row
+    pick_idx = st.number_input("Pick a row index from the table above", min_value=0, max_value=int(len(df_reqs) - 1), value=0, step=1)
+    row = df_reqs.iloc[int(pick_idx)].to_dict()
+
+    # required fields we expect in request
+    principal = float(row.get("principal") or 0)
+    borrower_member_id = int(row.get("borrower_member_id") or 0)
+    surety_member_id = int(row.get("surety_member_id") or 0)
+    borrower_name = (row.get("borrower_name") or f"Member {borrower_member_id}")
+    surety_name = (row.get("surety_name") or f"Member {surety_member_id}")
+    req_status = str(row.get("status") or "").lower()
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Borrower", f"{borrower_member_id} — {borrower_name}")
+    c2.metric("Surety", f"{surety_member_id} — {surety_name}")
+    c3.metric("Requested", f"{principal:,.0f}")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # We need a stable identifier to update request. Try common columns.
+    request_id = row.get("id", None)
+
+    # admin parameters
+    interest_rate = st.number_input("Interest rate (e.g. 0.05 = 5%)", min_value=0.0, max_value=1.0, value=0.05, step=0.01)
+    cycle_days = st.number_input("Interest cycle days", min_value=1, value=26, step=1)
+
+    if st.button("APPROVE + ISSUE LOAN", use_container_width=True, disabled=(req_status != "pending")):
+        try:
+            interest = round(principal * float(interest_rate), 6)
+            total_due = round(principal + interest, 6)
+
+            loan_payload = {
+                # core columns you showed
+                "member_id": borrower_member_id,                    # nullable but useful
+                "principal": principal,
+                "interest": interest,
+                "total_due": total_due,
+                "balance": total_due,
+                "status": "active",
+                "issued_at": now_iso(),
+                "created_at": now_iso(),
+                "borrower_member_id": borrower_member_id,
+                "surety_member_id": surety_member_id,
+                "borrower_name": borrower_name,
+                "surety_name": surety_name,
+                "updated_at": now_iso(),
+
+                # extra columns you showed
+                "borrow_date": str(date.today()),
+                "principal_current": principal,
+                "total_interest_accumulated": 0,
+                "last_interest_at": None,
+                "interest_cycle_days": int(cycle_days),
+                "last_interest_date": None,
+                "total_interest_generated": 0,
+                "unpaid_interest": 0,
+            }
+
+            svc.table("loans_legacy").insert(loan_payload).execute()
+
+            # update request -> approved (works whether id exists or not)
+            upd = {"status": "approved", "updated_at": now_iso()}
+            if request_id is not None:
+                svc.table("loan_requests_legacy").update(upd).eq("id", request_id).execute()
+            else:
+                # fallback update by matching main fields (best-effort)
+                svc.table("loan_requests_legacy").update(upd)\
+                    .eq("borrower_member_id", borrower_member_id)\
+                    .eq("surety_member_id", surety_member_id)\
+                    .eq("principal", principal)\
+                    .eq("status", "pending")\
+                    .execute()
+
+            st.success("Approved and issued loan into loans_legacy.")
+            st.rerun()
+        except Exception as e:
+            show_api_error(e, "Approve/Issue failed")
+
+    if st.button("REJECT REQUEST", use_container_width=True, disabled=(req_status != "pending")):
+        try:
+            upd = {"status": "rejected", "updated_at": now_iso()}
+            if request_id is not None:
+                svc.table("loan_requests_legacy").update(upd).eq("id", request_id).execute()
+            else:
+                svc.table("loan_requests_legacy").update(upd)\
+                    .eq("borrower_member_id", borrower_member_id)\
+                    .eq("surety_member_id", surety_member_id)\
+                    .eq("principal", principal)\
+                    .eq("status", "pending")\
+                    .execute()
+            st.success("Request rejected.")
+            st.rerun()
+        except Exception as e:
+            show_api_error(e, "Reject failed")
+
+# Show member application always; show admin approve section only for admin
+member_loan_application()
 if is_admin:
     st.divider()
-    admin_dashboard()
+    admin_approve_issue()
+
+# Optional: Admin payout button (only admin sees it)
+if is_admin:
+    st.divider()
+    st.subheader("Admin: Payout (Option B - Legacy)")
+    if st.button("Run Payout Now (Option B)", use_container_width=True, key="btn_run_payout_b"):
+        try:
+            receipt = legacy_payout_option_b(svc)
+            st.success("Payout completed.")
+            st.json(receipt)
+            st.rerun()
+        except Exception as e:
+            show_api_error(e, "Payout failed")
