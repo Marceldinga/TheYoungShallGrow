@@ -47,6 +47,37 @@ def safe_select_table(c, table: str, order_col: str | None = None, desc: bool = 
         q = q.limit(limit)
     return q.execute()
 
+def load_member_choices(c):
+    """
+    Dropdown data from member_registry:
+      label: "10 — John Doe (inactive)"
+      value inserted into legacy tables: member_id = legacy_member_id (int)
+    """
+    try:
+        resp = c.table("member_registry").select("legacy_member_id,full_name,is_active").order("legacy_member_id").execute()
+        rows = resp.data or []
+        df = pd.DataFrame(rows)
+
+        choices = []
+        label_to_id = {}
+        for r in rows:
+            mid = r.get("legacy_member_id")
+            name = r.get("full_name") or f"Member {mid}"
+            active = r.get("is_active")
+            tag = "" if active in (None, True) else " (inactive)"
+            label = f"{mid} — {name}{tag}"
+            choices.append(label)
+            label_to_id[label] = int(mid)
+
+        if not choices:
+            choices = ["No members found"]
+            label_to_id = {"No members found": 0}
+
+        return choices, label_to_id, df
+    except Exception as e:
+        show_api_error(e, "Could not load member_registry for dropdown")
+        return ["No members found"], {"No members found": 0}, pd.DataFrame()
+
 # -------------------- Login --------------------
 if "session" not in st.session_state:
     st.session_state.session = None
@@ -94,17 +125,16 @@ try:
 except Exception:
     st.warning("Could not read profiles (RLS). Continuing.")
 
+# Load member dropdown ONCE
+member_choices, member_label_to_id, df_member_registry = load_member_choices(client)
+
 # -------------------- Tabs --------------------
-tabs = st.tabs(["Members", "Rotation", "Contributions", "Foundation", "JSON Inserter"])
+tabs = st.tabs(["Members", "Rotation", "Contributions", "Foundation", "Loans", "JSON Inserter"])
 
 # ===================== MEMBERS =====================
 with tabs[0]:
     st.subheader("All Njangi Members (member_registry)")
-    try:
-        members = client.table("member_registry").select("*").order("legacy_member_id").execute()
-        st.dataframe(to_df(members), use_container_width=True)
-    except Exception as e:
-        show_api_error(e, "Could not load member_registry")
+    st.dataframe(df_member_registry, use_container_width=True)
 
 # ===================== ROTATION =====================
 with tabs[1]:
@@ -115,7 +145,7 @@ with tabs[1]:
     except Exception as e:
         show_api_error(e, "Could not load app_state")
 
-# ===================== CONTRIBUTIONS (FIXED) =====================
+# ===================== CONTRIBUTIONS =====================
 with tabs[2]:
     st.subheader("Contributions (contributions_legacy)")
 
@@ -131,7 +161,9 @@ with tabs[2]:
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        c_member_id = st.number_input("member_id (1–17)", min_value=1, max_value=17, step=1, value=1, key="c_member")
+        chosen_member_label = st.selectbox("Member", options=member_choices, index=0, key="c_member_label")
+        c_member_id = member_label_to_id.get(chosen_member_label, 0)
+        st.caption(f"member_id to insert: **{c_member_id}**")
     with c2:
         c_amount = st.number_input("amount", min_value=0, step=500, value=500, key="c_amount")
     with c3:
@@ -140,24 +172,25 @@ with tabs[2]:
         c_session_id = st.text_input("session_id (uuid, optional)", value="", key="c_session")
 
     if st.button("Insert Contribution (legacy)", use_container_width=True, key="btn_ins_contrib"):
-        payload = {
-            "member_id": int(c_member_id),
-            "amount": int(c_amount),
-            "kind": str(c_kind),
-        }
-        if c_session_id.strip():
-            payload["session_id"] = c_session_id.strip()
-        # If your table/RLS requires user_id, uncomment:
-        # payload["user_id"] = auth_uid
+        if c_member_id <= 0:
+            st.error("No valid member selected.")
+        else:
+            payload = {
+                "member_id": int(c_member_id),
+                "amount": int(c_amount),
+                "kind": str(c_kind),
+            }
+            if c_session_id.strip():
+                payload["session_id"] = c_session_id.strip()
 
-        try:
-            client.table("contributions_legacy").insert(payload).execute()
-            st.success("Inserted contribution.")
-            st.rerun()
-        except Exception as e:
-            show_api_error(e, "Insert failed (RLS or invalid data)")
+            try:
+                client.table("contributions_legacy").insert(payload).execute()
+                st.success("Inserted contribution.")
+                st.rerun()
+            except Exception as e:
+                show_api_error(e, "Insert failed (RLS or invalid session_id uuid)")
 
-# ===================== FOUNDATION (FIXED) =====================
+# ===================== FOUNDATION =====================
 with tabs[3]:
     st.subheader("Foundation Payments (foundation_payments_legacy)")
 
@@ -169,11 +202,13 @@ with tabs[3]:
 
     st.divider()
     st.markdown("### Insert Foundation Payment (legacy)")
-    st.caption("Columns: member_id (bigint), amount_paid, amount_pending, status, date_paid, notes, converted_to_loan.")
+    st.caption("Columns: member_id, amount_paid, amount_pending, status, date_paid, notes, converted_to_loan.")
 
     f1, f2, f3 = st.columns(3)
     with f1:
-        f_member_id = st.number_input("member_id (1–17)", min_value=1, max_value=17, step=1, value=1, key="f_member")
+        chosen_member_label_f = st.selectbox("Member", options=member_choices, index=0, key="f_member_label")
+        f_member_id = member_label_to_id.get(chosen_member_label_f, 0)
+        st.caption(f"member_id to insert: **{f_member_id}**")
     with f2:
         f_amount_paid = st.number_input("amount_paid", min_value=0.0, step=500.0, value=500.0, key="f_paid")
     with f3:
@@ -190,34 +225,183 @@ with tabs[3]:
     f_notes = st.text_input("notes (optional)", value="", key="f_notes")
 
     if st.button("Insert Foundation Payment (legacy)", use_container_width=True, key="btn_ins_found"):
-        payload = {
-            "member_id": int(f_member_id),
-            "amount_paid": float(f_amount_paid),
-            "amount_pending": float(f_amount_pending),
-            "status": str(f_status),
-            "date_paid": f"{f_date_paid}T00:00:00Z",
-            "converted_to_loan": bool(f_converted),
-        }
-        if f_notes.strip():
-            payload["notes"] = f_notes.strip()
+        if f_member_id <= 0:
+            st.error("No valid member selected.")
+        else:
+            payload = {
+                "member_id": int(f_member_id),
+                "amount_paid": float(f_amount_paid),
+                "amount_pending": float(f_amount_pending),
+                "status": str(f_status),
+                "date_paid": f"{f_date_paid}T00:00:00Z",
+                "converted_to_loan": bool(f_converted),
+            }
+            if f_notes.strip():
+                payload["notes"] = f_notes.strip()
+
+            try:
+                client.table("foundation_payments_legacy").insert(payload).execute()
+                st.success("Inserted foundation payment.")
+                st.rerun()
+            except Exception as e:
+                show_api_error(e, "Insert failed (RLS or invalid data)")
+
+# ===================== LOANS (SURETY QUALIFY + INSERT) =====================
+with tabs[4]:
+    st.subheader("Loans (Surety Qualification + Insert)")
+
+    LOANS_TABLE = "loans_legacy"  # change to "loans" if needed
+
+    try:
+        loans_resp = safe_select_table(client, LOANS_TABLE, order_col="id", desc=True, limit=200)
+        st.dataframe(to_df(loans_resp), use_container_width=True)
+    except Exception as e:
+        show_api_error(e, f"Could not load {LOANS_TABLE}")
+
+    st.divider()
+    st.markdown("### Create a Loan")
+
+    a1, a2, a3 = st.columns(3)
+    with a1:
+        borrower_label = st.selectbox("Borrower", options=member_choices, index=0, key="loan_borrower")
+        borrower_id = member_label_to_id.get(borrower_label, 0)
+        st.caption(f"borrower_id: **{borrower_id}**")
+    with a2:
+        surety_label = st.selectbox("Surety (optional)", options=["(none)"] + member_choices, index=0, key="loan_surety")
+        surety_id = None if surety_label == "(none)" else member_label_to_id.get(surety_label, 0)
+        st.caption(f"surety_id: **{surety_id if surety_id else 'None'}**")
+    with a3:
+        requested = st.number_input("Requested amount", min_value=0.0, step=500.0, value=500.0, key="loan_requested")
+
+    st.markdown("### Check Surety Eligibility (borrow_eligibility)")
+    st.caption("Calls your DB function: borrow_eligibility(p_borrower_id, p_surety_id, p_requested)")
+
+    elig_result = None
+    if st.button("Check Eligibility", use_container_width=True, key="btn_check_elig"):
+        if borrower_id <= 0:
+            st.error("Select a valid borrower.")
+        elif requested <= 0:
+            st.error("Requested amount must be > 0.")
+        else:
+            try:
+                s_id = surety_id if surety_id is not None else borrower_id
+                elig = client.rpc(
+                    "borrow_eligibility",
+                    {"p_borrower_id": int(borrower_id), "p_surety_id": int(s_id), "p_requested": float(requested)},
+                ).execute()
+                rows = elig.data or []
+                if rows:
+                    elig_result = rows[0]
+                    st.success(f"Eligible: {elig_result.get('eligible')} — {elig_result.get('reason')}")
+                    st.json(elig_result)
+                else:
+                    st.warning("No eligibility rows returned.")
+            except Exception as e:
+                show_api_error(e, "Eligibility check failed (RPC missing or RLS blocked)")
+
+    st.divider()
+    st.markdown("### Insert Loan")
+
+    status = st.selectbox("status (optional)", ["active", "pending", "closed", "paid"], index=0, key="loan_status")
+    notes = st.text_input("notes (optional)", value="", key="loan_notes")
+
+    if st.button("Insert Loan", use_container_width=True, key="btn_insert_loan"):
+        if borrower_id <= 0:
+            st.error("Select a valid borrower.")
+            st.stop()
+        if requested <= 0:
+            st.error("Requested amount must be > 0.")
+            st.stop()
+
+        # If eligibility was checked and returned false, block.
+        if elig_result is not None and not bool(elig_result.get("eligible")):
+            st.error(f"Not eligible: {elig_result.get('reason')}")
+            st.stop()
+
+        # Infer loans table columns from one row (avoids column mismatch)
+        sample = None
+        try:
+            sample_resp = client.table(LOANS_TABLE).select("*").limit(1).execute()
+            sample_rows = sample_resp.data or []
+            sample = sample_rows[0] if sample_rows else None
+        except Exception:
+            sample = None
+
+        if not sample:
+            st.error(
+                f"{LOANS_TABLE} is empty (or RLS blocks select). "
+                "Add one row manually or use JSON Inserter with correct columns."
+            )
+            st.stop()
+
+        cols = set(sample.keys())
+
+        def pick(*names):
+            for n in names:
+                if n in cols:
+                    return n
+            return None
+
+        borrower_col = pick("borrower_id", "borrower_member_id", "member_id", "member")
+        surety_col = pick("surety_id", "surety_member_id", "guarantor_id")
+        principal_col = pick("principal", "amount", "loan_amount", "principal_amount", "requested_amount")
+        interest_col = pick("interest", "interest_amount")
+        total_due_col = pick("total_due", "total", "total_amount", "amount_due")
+        status_col = pick("status", "loan_status")
+        issued_col = pick("issued_at", "created_at", "date_issued", "start_date")
+        notes_col = pick("notes", "note", "remark", "reason")
+
+        if not borrower_col:
+            st.error(f"Could not find borrower column in {LOANS_TABLE}. Columns: {sorted(list(cols))}")
+            st.stop()
+
+        payload = {borrower_col: int(borrower_id)}
+
+        if surety_col and surety_id is not None:
+            payload[surety_col] = int(surety_id)
+
+        if principal_col:
+            payload[principal_col] = float(requested)
+
+        # Optional: 5% upfront interest if columns exist
+        if interest_col and total_due_col:
+            upfront_interest = float(requested) * 0.05
+            payload[interest_col] = upfront_interest
+            payload[total_due_col] = float(requested) + upfront_interest
+        elif total_due_col and principal_col:
+            payload[total_due_col] = float(requested)
+
+        if status_col:
+            payload[status_col] = str(status)
+
+        # date/issued: try ISO; if DB has defaults, you can omit it
+        if issued_col:
+            payload[issued_col] = pd.Timestamp.utcnow().isoformat()
+
+        if notes_col and notes.strip():
+            payload[notes_col] = notes.strip()
 
         try:
-            client.table("foundation_payments_legacy").insert(payload).execute()
-            st.success("Inserted foundation payment.")
+            client.table(LOANS_TABLE).insert(payload).execute()
+            st.success("Loan inserted.")
             st.rerun()
         except Exception as e:
-            show_api_error(e, "Insert failed (RLS or invalid data)")
+            show_api_error(e, "Loan insert failed (RLS or column mismatch). Use JSON Inserter.")
 
 # ===================== JSON INSERTER =====================
-with tabs[4]:
+with tabs[5]:
     st.subheader("Universal Insert / Update (JSON)")
-    st.caption("Use this when you want to insert/update any table with exact column names.")
+    st.caption("Use this to insert/update any table with exact column names.")
 
     mode = st.radio("Mode", ["INSERT", "UPDATE"], horizontal=True)
     table_name = st.text_input("Table name", value="contributions_legacy")
 
     if mode == "INSERT":
-        payload_text = st.text_area("JSON payload", value=json.dumps({"member_id": 1, "amount": 500, "kind": "contribution"}, indent=2), height=200)
+        payload_text = st.text_area(
+            "JSON payload",
+            value=json.dumps({"member_id": 1, "amount": 500, "kind": "contribution"}, indent=2),
+            height=200,
+        )
         if st.button("Run INSERT", use_container_width=True):
             try:
                 payload = json.loads(payload_text)
