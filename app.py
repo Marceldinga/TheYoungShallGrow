@@ -8,9 +8,9 @@ from postgrest.exceptions import APIError
 
 # =============================================================================
 # The Young Shall Grow — Njangi Dashboard (Legacy)
-# - Members can SIGN UP + LOGIN
+# - Members can SIGN UP + LOGIN (ANON key)
 # - Members (non-admin) can ONLY request a loan
-# - Admin can add/manage legacy data + approve loan requests
+# - Admin can add/manage legacy data + approve loan requests (SERVICE key)
 # =============================================================================
 
 # -------------------- Page --------------------
@@ -106,11 +106,14 @@ def get_secret(key: str) -> str | None:
 
 SUPABASE_URL = get_secret("SUPABASE_URL")
 SUPABASE_ANON_KEY = get_secret("SUPABASE_ANON_KEY")
+SUPABASE_SERVICE_KEY = get_secret("SUPABASE_SERVICE_KEY")  # <-- your key name
+ADMIN_EMAILS = (get_secret("ADMIN_EMAILS") or "").strip()
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     st.error("Missing SUPABASE_URL / SUPABASE_ANON_KEY in Streamlit Secrets.")
     st.stop()
 
+# Signup/Login uses ANON key
 sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 # -------------------- Helpers --------------------
@@ -123,15 +126,29 @@ def now_iso():
 def show_api_error(e: Exception, title="Supabase error"):
     st.error(title)
     if isinstance(e, APIError):
-        st.code(e.message)
+        try:
+            st.code(e.message)
+        except Exception:
+            st.code(repr(e))
     else:
         st.code(repr(e))
 
 def authed_client():
+    """
+    IMPORTANT:
+    - Use SERVICE key for all database reads/writes (bypass RLS) => fixes member_registry errors.
+    - Fall back to anon+session only if SERVICE key is missing.
+    """
+    if SUPABASE_SERVICE_KEY:
+        return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
     c = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
     sess = st.session_state.get("session")
     if sess:
-        c.auth.set_session(sess.access_token, sess.refresh_token)
+        try:
+            c.auth.set_session(sess.access_token, sess.refresh_token)
+        except Exception:
+            pass
     return c
 
 def safe_select_autosort(c, table: str, limit=400):
@@ -354,15 +371,25 @@ with st.sidebar:
 if st.session_state.session is None:
     st.stop()
 
+# IMPORTANT: from here on, use SERVICE KEY client (bypass RLS)
 client = authed_client()
-user = client.auth.get_user()
-user_id = user.user.id
-user_email = user.user.email
+
+# We don't rely on service-client auth state; get identity from session
+user_id = st.session_state.session.user.id
+user_email = st.session_state.session.user.email
 
 member_labels, label_to_legacy_id, label_to_name, df_registry = load_member_registry(client)
 
 profile = get_profile(client, user_id)
+
+# Keep your original admin logic:
 is_admin = is_admin_profile(profile)
+
+# Optional extra safety: treat ADMIN_EMAILS as admin too (if provided)
+if ADMIN_EMAILS:
+    admin_list = [e.strip().lower() for e in ADMIN_EMAILS.split(",") if e.strip()]
+    if user_email and user_email.lower() in admin_list:
+        is_admin = True
 
 if not profile:
     st.warning("Complete your profile to continue.")
@@ -484,7 +511,10 @@ def member_portal():
     surety_member_id = int(label_to_legacy_id.get(surety_label, 0))
     surety_name = label_to_name.get(surety_label, "")
 
-    principal = st.number_input("Requested amount (principal)", min_value=500.0, step=500.0, value=500.0, key="m_principal")
+    principal = st.number_input(
+        "Requested amount (principal)",
+        min_value=500.0, step=500.0, value=500.0, key="m_principal"
+    )
 
     if st.button("Submit Loan Request", use_container_width=True, key="btn_submit_request"):
         if my_member_id <= 0:
@@ -515,17 +545,20 @@ def member_portal():
     st.divider()
     st.markdown("### My Loan Requests")
     try:
-        resp = client.table("loan_requests_legacy") \
-            .select("*") \
-            .eq("requester_user_id", user_id) \
-            .order("created_at", desc=True) \
-            .limit(200).execute()
+        resp = (
+            client.table("loan_requests_legacy")
+            .select("*")
+            .eq("requester_user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(200)
+            .execute()
+        )
         st.dataframe(pd.DataFrame(resp.data or []), use_container_width=True)
     except Exception as e:
         show_api_error(e, "Could not load your loan requests")
 
 # =============================================================================
-# ADMIN DASHBOARD (unchanged logic)
+# ADMIN DASHBOARD
 # =============================================================================
 def admin_dashboard():
     st.subheader("Admin Dashboard")
@@ -611,14 +644,23 @@ def admin_dashboard():
     with tabs[3]:
         st.subheader("loans_legacy")
         try:
-            st.dataframe(to_df(client.table("loans_legacy").select("*").order("created_at", desc=True).limit(400).execute()), use_container_width=True)
+            st.dataframe(to_df(
+                client.table("loans_legacy").select("*").order("created_at", desc=True).limit(400).execute()
+            ), use_container_width=True)
         except Exception as e:
             show_api_error(e, "Could not load loans_legacy")
 
     with tabs[4]:
         st.subheader("Loan Requests (Approve)")
         try:
-            reqs = client.table("loan_requests_legacy").select("*").order("created_at", desc=True).limit(400).execute().data or []
+            reqs = (
+                client.table("loan_requests_legacy")
+                .select("*")
+                .order("created_at", desc=True)
+                .limit(400)
+                .execute()
+                .data or []
+            )
             st.dataframe(pd.DataFrame(reqs), use_container_width=True)
         except Exception as e:
             show_api_error(e, "Could not load loan_requests_legacy")
@@ -647,7 +689,12 @@ def admin_dashboard():
     with tabs[7]:
         st.subheader("Universal JSON Inserter (Admin Only)")
         table = st.text_input("table", value="contributions_legacy", key="json_table")
-        payload_text = st.text_area("payload (json)", value='{"member_id": 1, "amount": 500, "kind": "contribution"}', height=220, key="json_payload")
+        payload_text = st.text_area(
+            "payload (json)",
+            value='{"member_id": 1, "amount": 500, "kind": "contribution"}',
+            height=220,
+            key="json_payload"
+        )
         if st.button("Run Insert", use_container_width=True, key="btn_json_insert"):
             try:
                 payload = json.loads(payload_text)
