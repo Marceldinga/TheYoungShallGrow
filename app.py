@@ -1,3 +1,4 @@
+
 import os
 import json
 import streamlit as st
@@ -229,6 +230,86 @@ def is_member(profile: dict | None) -> bool:
     return str(profile.get("role") or "").lower() == "member" and bool(profile.get("approved") is True)
 
 # ============================================================
+# Auth UI (Login + Signup)  ✅ SHOW FIRST, NOTHING ELSE
+# ============================================================
+if "session" not in st.session_state:
+    st.session_state.session = None
+
+with st.sidebar:
+    st.markdown("### Login / Sign Up")
+
+    if st.session_state.session is None:
+        mode = st.radio("Mode", ["Login", "Sign Up"], horizontal=True)
+
+        email = st.text_input("Email", key="auth_email")
+        password = st.text_input("Password", type="password", key="auth_password")
+
+        if mode == "Sign Up":
+            st.caption("After sign up, admin must approve you in profiles (approved=true).")
+            if st.button("Create account", use_container_width=True):
+                try:
+                    sb.auth.sign_up({"email": email, "password": password})
+                    st.success("Account created. Now login.")
+                except Exception as e:
+                    show_api_error(e, "Sign up failed")
+
+        else:
+            if st.button("Login", use_container_width=True, key="btn_login"):
+                try:
+                    res = sb.auth.sign_in_with_password({"email": email, "password": password})
+                    st.session_state.session = res.session
+                    st.rerun()
+                except Exception as e:
+                    show_api_error(e, "Login failed")
+
+    else:
+        st.success(f"Logged in: {st.session_state.session.user.email}")
+        if st.button("Logout", use_container_width=True):
+            try:
+                sb.auth.sign_out()
+            except Exception:
+                pass
+            st.session_state.session = None
+            st.rerun()
+
+# ✅ If not logged in, stop BEFORE showing dashboard header/body
+if st.session_state.session is None:
+    st.markdown(
+        """
+        <div class="panel">
+          <div style="font-size:1.4rem;font-weight:900;">Njangi Login</div>
+          <div style="color:var(--muted);margin-top:6px;">
+            Please login or sign up from the sidebar to access the dashboard.
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
+# ============================================================
+# Continue after login
+# ============================================================
+client = authed_client()
+user_id = st.session_state.session.user.id
+user_email = st.session_state.session.user.email
+# ============================================================
+# Load / profile check
+# ============================================================
+st.caption(f"Logged in user id: {user_id}")
+st.caption(f"Logged in email: {user_email}")
+
+profile = get_profile(client, user_id)
+role_txt = (profile or {}).get("role", "unknown")
+approved_txt = (profile or {}).get("approved", False)
+
+st.caption(f"Profile role: {role_txt} • approved: {approved_txt}")
+
+if not (is_admin(profile) or is_member(profile)):
+    st.warning("Your account is not approved yet. Ask admin to set profiles.approved=true.")
+    st.stop()
+
+# ============================================================
 # Load registry
 # ============================================================
 def load_member_registry(c):
@@ -257,6 +338,8 @@ def load_member_registry(c):
 
     return labels, label_to_legacy, label_to_name, df
 
+member_labels, label_to_legacy_id, label_to_name, df_registry = load_member_registry(client)
+
 # ============================================================
 # KPIs helpers
 # ============================================================
@@ -264,11 +347,9 @@ def get_app_state(c):
     return fetch_one(c.table("app_state").select("*").eq("id", 1))
 
 def sum_contribution_pot(c):
-    # pot = sum where kind='contribution'
     resp = c.table("contributions_legacy").select("amount,kind").limit(10000).execute()
-    rows = resp.data or []
     pot = 0
-    for r in rows:
+    for r in (resp.data or []):
         if (r.get("kind") or "contribution") == "contribution":
             try:
                 pot += int(r.get("amount") or 0)
@@ -318,7 +399,6 @@ def loans_interest_totals(c):
     return total_interest, unpaid, active_count, active_total_due
 
 def fines_totals(c):
-    # fines_legacy columns: id, member_id, member_name, amount, reason, status, paid_at, created_at, updated_at
     resp = c.table("fines_legacy").select("amount,status").limit(10000).execute()
     total = 0.0
     unpaid = 0.0
@@ -331,10 +411,9 @@ def fines_totals(c):
     return total, unpaid
 
 # ============================================================
-# Borrow capacity (UPDATED: use kind='paid')
+# Borrow capacity (use kind='paid')
 # ============================================================
 def member_available_to_borrow(c, legacy_member_id: int):
-    # contributions counted as PAID
     resp_c = (
         c.table("contributions_legacy")
         .select("amount,kind,member_id")
@@ -344,11 +423,9 @@ def member_available_to_borrow(c, legacy_member_id: int):
     )
     contrib = 0.0
     for r in (resp_c.data or []):
-        k = (r.get("kind") or "").lower().strip()
-        if k == "paid":
+        if (r.get("kind") or "").lower().strip() == "paid":
             contrib += float(r.get("amount") or 0)
 
-    # foundation = paid + pending
     resp_f = (
         c.table("foundation_payments_legacy")
         .select("amount_paid,amount_pending,member_id")
@@ -360,64 +437,36 @@ def member_available_to_borrow(c, legacy_member_id: int):
     for r in (resp_f.data or []):
         found += float(r.get("amount_paid") or 0) + float(r.get("amount_pending") or 0)
 
-    # rule: available = paid_contrib + 70% foundation
     return contrib + (found * 0.70), contrib, found
 
 # ============================================================
-# Payout Option B
+# ✅ FIX: Member Loan Totals (so loans are not 0 per member)
 # ============================================================
-def legacy_payout_option_b(c):
-    st_row = get_app_state(c)
-    if not st_row:
-        raise Exception("app_state id=1 not found or blocked by RLS")
+def member_loan_totals(c, legacy_member_id: int):
+    resp = (
+        c.table("loans_legacy")
+        .select("principal_current,unpaid_interest,total_due,status")
+        .eq("member_id", legacy_member_id)
+        .limit(10000)
+        .execute()
+    )
 
-    idx = int(st_row.get("next_payout_index") or 1)
-    pot = sum_contribution_pot(c)
-    if pot <= 0:
-        raise Exception("Pot is zero (no kind='contribution' rows in contributions_legacy).")
+    principal = 0.0
+    unpaid_interest = 0.0
+    active_loans = 0
+    total_due = 0.0
 
-    ben = fetch_one(c.table("member_registry").select("legacy_member_id,full_name").eq("legacy_member_id", idx))
-    ben_name = (ben or {}).get("full_name") or f"Member {idx}"
+    for r in (resp.data or []):
+        if str(r.get("status") or "").lower() == "active":
+            active_loans += 1
+            principal += float(r.get("principal_current") or 0)
+            unpaid_interest += float(r.get("unpaid_interest") or 0)
+            total_due += float(r.get("total_due") or 0)
 
-    payout_payload = {
-        "member_id": idx,
-        "member_name": ben_name,
-        "payout_amount": pot,
-        "payout_date": str(date.today()),
-        "created_at": now_iso(),
-    }
-    payout_inserted = False
-    try:
-        c.table("payouts_legacy").insert(payout_payload).execute()
-        payout_inserted = True
-    except Exception:
-        payout_inserted = False
-
-    c.table("contributions_legacy").update({"kind": "paid", "updated_at": now_iso()}).eq("kind", "contribution").execute()
-
-    nxt = idx + 1
-    if nxt > 17:
-        nxt = 1
-
-    next_date = (date.today() + timedelta(days=14)).isoformat()
-
-    c.table("app_state").update({
-        "next_payout_index": nxt,
-        "next_payout_date": next_date,
-        "updated_at": now_iso()
-    }).eq("id", 1).execute()
-
-    return {
-        "beneficiary_legacy_member_id": idx,
-        "beneficiary_name": ben_name,
-        "pot_paid_out": pot,
-        "payout_logged": payout_inserted,
-        "next_payout_index": nxt,
-        "next_payout_date": next_date,
-    }
+    return principal, unpaid_interest, active_loans, total_due
 
 # ============================================================
-# Header
+# Header (✅ NOW ONLY AFTER LOGIN)
 # ============================================================
 st.markdown(
     """
@@ -438,75 +487,7 @@ st.markdown(
 st.write("")
 
 # ============================================================
-# Auth UI (Login + Signup)
-# ============================================================
-if "session" not in st.session_state:
-    st.session_state.session = None
-
-with st.sidebar:
-    st.markdown("### Login / Sign Up")
-
-    if st.session_state.session is None:
-        mode = st.radio("Mode", ["Login", "Sign Up"], horizontal=True)
-
-        email = st.text_input("Email", key="auth_email")
-        password = st.text_input("Password", type="password", key="auth_password")
-
-        if mode == "Sign Up":
-            st.caption("After sign up, admin must approve you in profiles (approved=true).")
-            if st.button("Create account", use_container_width=True):
-                try:
-                    sb.auth.sign_up({"email": email, "password": password})
-                    st.success("Account created. Now login.")
-                except Exception as e:
-                    show_api_error(e, "Sign up failed")
-
-        else:
-            if st.button("Login", use_container_width=True, key="btn_login"):
-                try:
-                    res = sb.auth.sign_in_with_password({"email": email, "password": password})
-                    st.session_state.session = res.session
-                    st.rerun()
-                except Exception as e:
-                    show_api_error(e, "Login failed")
-
-    else:
-        st.success(f"Logged in: {st.session_state.session.user.email}")
-        if st.button("Logout", use_container_width=True):
-            try:
-                sb.auth.sign_out()
-            except Exception:
-                pass
-            st.session_state.session = None
-            st.rerun()
-
-if st.session_state.session is None:
-    st.stop()
-
-client = authed_client()
-user_id = st.session_state.session.user.id
-user_email = st.session_state.session.user.email
-
-st.caption(f"Logged in user id: {user_id}")
-st.caption(f"Logged in email: {user_email}")
-
-profile = get_profile(client, user_id)
-role_txt = (profile or {}).get("role", "unknown")
-approved_txt = (profile or {}).get("approved", False)
-
-st.caption(f"Profile role: {role_txt} • approved: {approved_txt}")
-
-if not (is_admin(profile) or is_member(profile)):
-    st.warning("Your account is not approved yet. Ask admin to set profiles.approved=true.")
-    st.stop()
-
-# ============================================================
-# Load members
-# ============================================================
-member_labels, label_to_legacy_id, label_to_name, df_registry = load_member_registry(client)
-
-# ============================================================
-# KPI Row
+# KPI Row (Global)
 # ============================================================
 try:
     state = get_app_state(client) or {}
@@ -544,7 +525,7 @@ st.markdown("<div class='panel'>Tip: If tables are blank or inserts fail, it’s
 st.divider()
 
 # ============================================================
-# Tabs (Members read-only for members; admin gets full tabs)
+# Tabs
 # ============================================================
 admin_mode = is_admin(profile)
 
@@ -565,7 +546,6 @@ tab_names_member = [
 
 tabs = st.tabs(tab_names_admin if admin_mode else tab_names_member)
 
-# Helper to map index
 def tab_index(name: str) -> int:
     names = tab_names_admin if admin_mode else tab_names_member
     return names.index(name)
@@ -575,10 +555,10 @@ with tabs[tab_index("Members")]:
     st.subheader("member_registry")
     st.dataframe(df_registry, use_container_width=True)
 
-# ===================== MEMBER BORROW CAPACITY =====================
+# ===================== MEMBER BORROW CAPACITY (✅ SHOW MEMBER LOANS TOO) =====================
 with tabs[tab_index("Member Borrow Capacity")]:
     st.subheader("Borrow capacity (per member - Legacy rule)")
-    st.caption("UPDATED: Contributions counted from contributions_legacy where kind='paid'.")
+    st.caption("UPDATED: Contributions counted from contributions_legacy where kind='paid' + shows member loan balance.")
 
     pick = st.selectbox("Pick member", member_labels, key="cap_member")
     mid = int(label_to_legacy_id.get(pick, 0))
@@ -586,8 +566,9 @@ with tabs[tab_index("Member Borrow Capacity")]:
 
     try:
         avail, paid_contrib, found = member_available_to_borrow(client, mid)
+        principal, unpaid_int, active_cnt, due_total = member_loan_totals(client, mid)
 
-        top = st.columns(4)
+        top = st.columns(6)
         with top[0]:
             kpi_card("Member", f"{mid} — {name}", badge_text="Legacy ID", badge_kind="accent", sub="From member_registry")
         with top[1]:
@@ -596,15 +577,24 @@ with tabs[tab_index("Member Borrow Capacity")]:
             kpi_card("Foundation", money(found), badge_text="Raw", badge_kind="accent", sub="paid + pending")
         with top[3]:
             kpi_card("Available to borrow", money(avail), badge_text="Rule", badge_kind="green", sub="paid + 0.70×foundation")
+        with top[4]:
+            kpi_card("Active Loans", str(active_cnt), badge_text="Loans", badge_kind=("warn" if active_cnt > 0 else "green"), sub="status='active'")
+        with top[5]:
+            kpi_card("Loan Balance", money(due_total), badge_text="Due", badge_kind=("danger" if due_total > 0 else "green"), sub=f"Unpaid interest {money(unpaid_int)}")
 
         st.caption("Rule: available = paid_contributions + 0.70 × (foundation paid + pending)")
+
     except Exception as e:
-        show_api_error(e, f"Could not compute borrow capacity for {mid} — {name}")
+        show_api_error(e, f"Could not compute borrow capacity/loans for {mid} — {name}")
 
 # Stop here for members (read-only)
 if not admin_mode:
     st.info("Member mode: read-only dashboard (no inserts).")
     st.stop()
+
+# ============================================================
+# (KEEP THE REST OF YOUR ADMIN TABS EXACTLY AS YOU ALREADY HAVE)
+# ============================================================
 
 # ===================== CONTRIBUTIONS (LEGACY) =====================
 with tabs[tab_index("Contributions (Legacy)")]:
@@ -795,6 +785,56 @@ with tabs[tab_index("Fines (Legacy)")]:
             show_api_error(e, "Fine insert failed (RLS/column mismatch)")
 
 # ===================== PAYOUT (OPTION B - LEGACY) =====================
+def legacy_payout_option_b(c):
+    st_row = get_app_state(c)
+    if not st_row:
+        raise Exception("app_state id=1 not found or blocked by RLS")
+
+    idx = int(st_row.get("next_payout_index") or 1)
+    pot = sum_contribution_pot(c)
+    if pot <= 0:
+        raise Exception("Pot is zero (no kind='contribution' rows in contributions_legacy).")
+
+    ben = fetch_one(c.table("member_registry").select("legacy_member_id,full_name").eq("legacy_member_id", idx))
+    ben_name = (ben or {}).get("full_name") or f"Member {idx}"
+
+    payout_payload = {
+        "member_id": idx,
+        "member_name": ben_name,
+        "payout_amount": pot,
+        "payout_date": str(date.today()),
+        "created_at": now_iso(),
+    }
+    payout_inserted = False
+    try:
+        c.table("payouts_legacy").insert(payout_payload).execute()
+        payout_inserted = True
+    except Exception:
+        payout_inserted = False
+
+    c.table("contributions_legacy").update({"kind": "paid", "updated_at": now_iso()}).eq("kind", "contribution").execute()
+
+    nxt = idx + 1
+    if nxt > 17:
+        nxt = 1
+
+    next_date = (date.today() + timedelta(days=14)).isoformat()
+
+    c.table("app_state").update({
+        "next_payout_index": nxt,
+        "next_payout_date": next_date,
+        "updated_at": now_iso()
+    }).eq("id", 1).execute()
+
+    return {
+        "beneficiary_legacy_member_id": idx,
+        "beneficiary_name": ben_name,
+        "pot_paid_out": pot,
+        "payout_logged": payout_inserted,
+        "next_payout_index": nxt,
+        "next_payout_date": next_date,
+    }
+
 with tabs[tab_index("Payout (Option B)")]:
     st.subheader("Payout (Option B - Legacy)")
 
