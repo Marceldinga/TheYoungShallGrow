@@ -445,7 +445,7 @@ def member_available_to_borrow(c, legacy_member_id: int):
 def member_loan_totals(c, legacy_member_id: int):
     resp = (
         c.table("loans_legacy")
-        .select("principal_current,unpaid_interest,total_due,status")
+        .select("principal_current,unpaid_interest,")
         .eq("member_id", legacy_member_id)
         .limit(10000)
         .execute()
@@ -454,16 +454,16 @@ def member_loan_totals(c, legacy_member_id: int):
     principal = 0.0
     unpaid_interest = 0.0
     active_loans = 0
-    total_due = 0.0
+
 
     for r in (resp.data or []):
         if str(r.get("status") or "").lower() == "active":
             active_loans += 1
             principal += float(r.get("principal_current") or 0)
             unpaid_interest += float(r.get("unpaid_interest") or 0)
-            total_due += float(r.get("total_due") or 0)
+            total_due += float(r.get("principal_current") or 0)
 
-    return principal, unpaid_interest, active_loans, total_due
+    return principal, unpaid_interest, active_loans
 
 # ============================================================
 # Header (✅ NOW ONLY AFTER LOGIN)
