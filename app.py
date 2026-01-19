@@ -7,103 +7,107 @@ from supabase import create_client
 from datetime import date, datetime, timezone, timedelta
 
 # ============================================================
-# Page + Theme (Nice UI / fixed colors)
+# BANK DASHBOARD THEME (premium UI)
 # ============================================================
-st.set_page_config(page_title="Njangi Dashboard (Legacy)", layout="wide")
+st.set_page_config(page_title="Njangi Bank Dashboard", layout="wide", page_icon="🏦")
 
 st.markdown(
     """
 <style>
 :root{
-  --bg:#0b1220;
+  --bg:#070b14;
+  --surface:#0b1220;
   --card:#0f1b31;
-  --card2:#0d172b;
-  --text:#e8eefc;
-  --muted:#a9b6d5;
-  --accent:#4f8cff;
-  --accent2:#22c55e;
+  --text:#eef4ff;
+  --muted:#a8b6d6;
+  --brand:#1d4ed8;
+  --good:#22c55e;
   --warn:#f59e0b;
   --danger:#ef4444;
   --border:rgba(255,255,255,0.10);
+  --shadow: 0 14px 30px rgba(0,0,0,0.30);
 }
-
 .stApp{
-  background: linear-gradient(180deg, var(--bg) 0%, #070b14 70%, #05070f 100%);
+  background: radial-gradient(1200px 700px at 20% 0%, rgba(29,78,216,0.18), transparent 60%),
+              radial-gradient(1000px 600px at 90% 10%, rgba(34,197,94,0.10), transparent 55%),
+              linear-gradient(180deg, var(--bg) 0%, #05070f 100%);
   color: var(--text);
 }
+.block-container{ padding-top: 1.1rem; padding-bottom: 2rem; max-width: 1450px; }
 h1,h2,h3{ color: var(--text); }
 p,li,span,div{ color: var(--text); }
 small, .stCaption, .stMarkdown p{ color: var(--muted) !important; }
-.block-container{ padding-top: 1.2rem; padding-bottom: 2rem; }
 
 section[data-testid="stSidebar"]{
-  background: rgba(15, 27, 49, 0.75);
+  background: rgba(11, 18, 32, 0.85);
   border-right: 1px solid var(--border);
 }
 section[data-testid="stSidebar"] *{ color: var(--text) !important; }
 
-.kpi-card{
+.bank-topbar{
+  background: rgba(15, 27, 49, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+.bank-title{
+  font-size: 1.25rem;
+  font-weight: 950;
+  letter-spacing: .2px;
+}
+.bank-sub{
+  color: var(--muted);
+  font-weight: 700;
+  font-size: .86rem;
+  margin-top: 3px;
+}
+.pill{
+  display:inline-flex; align-items:center; gap:8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  font-weight: 850;
+  font-size: .78rem;
+}
+.pill-blue{ border-color: rgba(29,78,216,0.45); background: rgba(29,78,216,0.12); color: #cfe0ff; }
+.pill-green{ border-color: rgba(34,197,94,0.45); background: rgba(34,197,94,0.12); color: #d1fae5; }
+.pill-warn{ border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.12); color: #ffedd5; }
+.pill-danger{ border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.12); color: #fee2e2; }
+
+.card{
   background: rgba(15, 27, 49, 0.75);
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 14px 14px 12px 14px;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.25);
+  box-shadow: var(--shadow);
+  height: 100%;
 }
-.kpi-top{
-  display:flex; align-items:center; justify-content:space-between;
-  gap:10px; margin-bottom:8px;
-}
-.kpi-title{
-  font-size: 0.85rem;
-  color: var(--muted);
-  font-weight: 600;
-  letter-spacing: .2px;
-}
-.kpi-value{
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: var(--text);
-}
-.kpi-sub{
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-.badge{
-  display:inline-flex;
-  align-items:center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.04);
-}
-.badge-accent{ color: #cfe0ff; border-color: rgba(79,140,255,.45); background: rgba(79,140,255,.12); }
-.badge-green{ color: #d1fae5; border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.12); }
-.badge-warn{ color: #ffedd5; border-color: rgba(245,158,11,.45); background: rgba(245,158,11,.12); }
-.badge-danger{ color: #fee2e2; border-color: rgba(239,68,68,.45); background: rgba(239,68,68,.12); }
+.kpi-title{ color: var(--muted); font-weight: 800; font-size: .82rem; letter-spacing: .2px; }
+.kpi-value{ font-weight: 950; font-size: 1.40rem; margin-top: 6px; }
+.kpi-sub{ color: var(--muted); font-size: .78rem; margin-top: 5px; }
 
 .panel{
-  background: rgba(13, 23, 43, 0.70);
+  background: rgba(12, 23, 44, 0.70);
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 16px;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.22);
 }
 
 .stButton>button{
-  background: linear-gradient(135deg, rgba(79,140,255,.95), rgba(59,130,246,.85));
+  background: linear-gradient(135deg, rgba(29,78,216,.98), rgba(37,99,235,.85));
   color: white;
   border: 1px solid rgba(255,255,255,0.10);
   border-radius: 12px;
   padding: 0.55rem 0.85rem;
-  font-weight: 800;
+  font-weight: 950;
 }
 .stButton>button:hover{
-  background: linear-gradient(135deg, rgba(79,140,255,1), rgba(37,99,235,1));
+  background: linear-gradient(135deg, rgba(29,78,216,1), rgba(59,130,246,1));
   border-color: rgba(255,255,255,0.18);
 }
-.stButton>button:disabled{ opacity: 0.6; }
 
 div[data-baseweb="input"] > div,
 div[data-baseweb="select"] > div,
@@ -113,15 +117,14 @@ textarea{
   border-color: rgba(255,255,255,0.10) !important;
   color: var(--text) !important;
 }
-label{ color: var(--muted) !important; font-weight: 650 !important; }
+label{ color: var(--muted) !important; font-weight: 800 !important; }
 
 [data-testid="stDataFrame"]{
   border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
 }
-
-.stTabs [data-baseweb="tab"]{ color: var(--muted); font-weight: 800; }
+.stTabs [data-baseweb="tab"]{ color: var(--muted); font-weight: 950; }
 .stTabs [aria-selected="true"]{ color: var(--text); }
 .stAlert{ border-radius: 14px; }
 </style>
@@ -150,8 +153,29 @@ sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 # ============================================================
 # Helpers
 # ============================================================
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+def money(x):
+    try:
+        return f"{float(x):,.0f}"
+    except Exception:
+        return str(x)
+
 def to_df(resp):
     return pd.DataFrame(resp.data or [])
+
+def show_api_error(e: Exception, title="Supabase error"):
+    st.error(title)
+    st.code(repr(e))
+
+def fetch_one(qb):
+    try:
+        res = qb.limit(1).execute()
+        rows = res.data or []
+        return rows[0] if rows else None
+    except Exception:
+        return None
 
 def authed_client():
     c = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -160,22 +184,7 @@ def authed_client():
         c.auth.set_session(sess.access_token, sess.refresh_token)
     return c
 
-def show_api_error(e: Exception, title="Supabase error"):
-    st.error(title)
-    st.code(repr(e))
-
-def now_iso():
-    return datetime.now(timezone.utc).isoformat()
-
-def fetch_one(query_builder):
-    try:
-        res = query_builder.limit(1).execute()
-        rows = res.data or []
-        return rows[0] if rows else None
-    except Exception:
-        return None
-
-def safe_select_autosort(c, table: str, limit=400):
+def safe_select_autosort(c, table: str, limit=800):
     for col in ["created_at", "issued_at", "updated_at", "paid_at", "date_paid", "borrow_date", "joined_at"]:
         try:
             return c.table(table).select("*").order(col, desc=True).limit(limit).execute()
@@ -183,60 +192,92 @@ def safe_select_autosort(c, table: str, limit=400):
             continue
     return c.table(table).select("*").limit(limit).execute()
 
-def money(x):
-    try:
-        return f"{float(x):,.0f}"
-    except Exception:
-        return str(x)
-
-def kpi_card(title, value, badge_text=None, badge_kind="accent", sub=None):
-    badge_class = {
-        "accent": "badge badge-accent",
-        "green": "badge badge-green",
-        "warn": "badge badge-warn",
-        "danger": "badge badge-danger",
-    }.get(badge_kind, "badge badge-accent")
-
-    badge_html = f'<span class="{badge_class}">{badge_text}</span>' if badge_text else ""
-    sub_html = f'<div class="kpi-sub">{sub}</div>' if sub else ""
+def kpi(title, value, sub="", pill_text=None, pill_kind="blue"):
+    pill_map = {
+        "blue": "pill pill-blue",
+        "green": "pill pill-green",
+        "warn": "pill pill-warn",
+        "danger": "pill pill-danger",
+    }
+    pill_html = f'<span class="{pill_map.get(pill_kind,"pill pill-blue")}">{pill_text}</span>' if pill_text else ""
     st.markdown(
         f"""
-<div class="kpi-card">
-  <div class="kpi-top">
+<div class="card">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
     <div class="kpi-title">{title}</div>
-    {badge_html}
+    {pill_html}
   </div>
   <div class="kpi-value">{value}</div>
-  {sub_html}
+  <div class="kpi-sub">{sub}</div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-# ============================================================
-# Role / approvals (profiles table)
-# ============================================================
+def download_csv_button(df: pd.DataFrame, filename: str, label: str):
+    if df is None or df.empty:
+        st.caption("No data to export.")
+        return
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label=label,
+        data=csv,
+        file_name=filename,
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+def filter_df_ui(df: pd.DataFrame, key_prefix="flt"):
+    if df is None or df.empty:
+        return df
+
+    cols = st.columns([2, 1, 1, 1])
+    with cols[0]:
+        q = st.text_input("Search", value="", key=f"{key_prefix}_q", placeholder="Search...")
+    with cols[1]:
+        limit = st.selectbox("Rows", [50, 100, 200, 500, 800, 1000], index=3, key=f"{key_prefix}_limit")
+    with cols[2]:
+        status_val = None
+        if "status" in df.columns:
+            opts = ["All"] + sorted([str(x) for x in df["status"].dropna().unique().tolist()])
+            status_val = st.selectbox("status", opts, index=0, key=f"{key_prefix}_status")
+    with cols[3]:
+        kind_val = None
+        if "kind" in df.columns:
+            opts = ["All"] + sorted([str(x) for x in df["kind"].dropna().unique().tolist()])
+            kind_val = st.selectbox("kind", opts, index=0, key=f"{key_prefix}_kind")
+
+    out = df.copy()
+
+    if q.strip():
+        needle = q.strip().lower()
+        out = out[out.astype(str).apply(lambda r: r.str.lower().str.contains(needle, na=False)).any(axis=1)]
+
+    if "status" in out.columns and status_val and status_val != "All":
+        out = out[out["status"].astype(str) == status_val]
+
+    if "kind" in out.columns and kind_val and kind_val != "All":
+        out = out[out["kind"].astype(str) == kind_val]
+
+    return out.head(int(limit))
+
 def get_profile(c, user_id: str):
     return fetch_one(c.table("profiles").select("id,role,approved,member_id").eq("id", user_id))
 
-def is_admin(profile: dict | None) -> bool:
-    if not profile:
-        return False
-    return str(profile.get("role") or "").lower() == "admin" and bool(profile.get("approved") is True)
+def is_admin(profile):
+    return bool(profile) and str(profile.get("role") or "").lower() == "admin" and bool(profile.get("approved") is True)
 
-def is_member(profile: dict | None) -> bool:
-    if not profile:
-        return False
-    return str(profile.get("role") or "").lower() == "member" and bool(profile.get("approved") is True)
+def is_member(profile):
+    return bool(profile) and str(profile.get("role") or "").lower() == "member" and bool(profile.get("approved") is True)
 
 # ============================================================
-# Auth UI (Login + Signup)  ✅ SHOW FIRST, NOTHING ELSE
+# Auth UI
 # ============================================================
 if "session" not in st.session_state:
     st.session_state.session = None
 
 with st.sidebar:
-    st.markdown("### Login / Sign Up")
+    st.markdown("### 🏦 Njangi Bank Access")
 
     if st.session_state.session is None:
         mode = st.radio("Mode", ["Login", "Sign Up"], horizontal=True)
@@ -252,7 +293,6 @@ with st.sidebar:
                     st.success("Account created. Now login.")
                 except Exception as e:
                     show_api_error(e, "Sign up failed")
-
         else:
             if st.button("Login", use_container_width=True, key="btn_login"):
                 try:
@@ -261,9 +301,8 @@ with st.sidebar:
                     st.rerun()
                 except Exception as e:
                     show_api_error(e, "Login failed")
-
     else:
-        st.success(f"Logged in: {st.session_state.session.user.email}")
+        st.success(f"Signed in: {st.session_state.session.user.email}")
         if st.button("Logout", use_container_width=True):
             try:
                 sb.auth.sign_out()
@@ -272,14 +311,13 @@ with st.sidebar:
             st.session_state.session = None
             st.rerun()
 
-# ✅ If not logged in, stop BEFORE showing dashboard header/body
 if st.session_state.session is None:
     st.markdown(
         """
         <div class="panel">
-          <div style="font-size:1.4rem;font-weight:900;">Njangi Login</div>
+          <div style="font-size:1.35rem;font-weight:950;">Welcome to Njangi Bank Dashboard</div>
           <div style="color:var(--muted);margin-top:6px;">
-            Please login or sign up from the sidebar to access the dashboard.
+            Please login from the sidebar to access accounts, transactions, and loans.
           </div>
         </div>
         """,
@@ -288,35 +326,26 @@ if st.session_state.session is None:
     st.stop()
 
 # ============================================================
-# Continue after login
+# After login
 # ============================================================
 client = authed_client()
 user_id = st.session_state.session.user.id
 user_email = st.session_state.session.user.email
-# ============================================================
-# Load / profile check
-# ============================================================
-st.caption(f"Logged in user id: {user_id}")
-st.caption(f"Logged in email: {user_email}")
 
 profile = get_profile(client, user_id)
-role_txt = (profile or {}).get("role", "unknown")
-approved_txt = (profile or {}).get("approved", False)
-
-st.caption(f"Profile role: {role_txt} • approved: {approved_txt}")
-
 if not (is_admin(profile) or is_member(profile)):
     st.warning("Your account is not approved yet. Ask admin to set profiles.approved=true.")
     st.stop()
 
+admin_mode = is_admin(profile)
+
 # ============================================================
-# Load registry
+# Load member_registry
 # ============================================================
 def load_member_registry(c):
     resp = c.table("member_registry").select(
         "legacy_member_id,full_name,is_active,phone,created_at"
     ).order("legacy_member_id").execute()
-
     rows = resp.data or []
     df = pd.DataFrame(rows)
 
@@ -341,144 +370,108 @@ def load_member_registry(c):
 member_labels, label_to_legacy_id, label_to_name, df_registry = load_member_registry(client)
 
 # ============================================================
-# KPIs helpers
+# KPI helpers
 # ============================================================
 def get_app_state(c):
     return fetch_one(c.table("app_state").select("*").eq("id", 1))
 
 def sum_contribution_pot(c):
-    resp = c.table("contributions_legacy").select("amount,kind").limit(10000).execute()
-    pot = 0
+    resp = c.table("contributions_legacy").select("amount,kind").limit(20000).execute()
+    pot = 0.0
     for r in (resp.data or []):
         if (r.get("kind") or "contribution") == "contribution":
-            try:
-                pot += int(r.get("amount") or 0)
-            except Exception:
-                pass
+            pot += float(r.get("amount") or 0)
     return pot
 
 def sum_total_contributions_alltime(c):
-    resp = c.table("contributions_legacy").select("amount").limit(10000).execute()
-    total = 0
-    for r in (resp.data or []):
-        try:
-            total += int(r.get("amount") or 0)
-        except Exception:
-            pass
-    return total
+    resp = c.table("contributions_legacy").select("amount").limit(20000).execute()
+    return sum(float(r.get("amount") or 0) for r in (resp.data or []))
 
 def foundation_totals(c):
-    resp = c.table("foundation_payments_legacy").select("amount_paid,amount_pending").limit(10000).execute()
-    paid = 0.0
-    pending = 0.0
-    for r in (resp.data or []):
-        paid += float(r.get("amount_paid") or 0)
-        pending += float(r.get("amount_pending") or 0)
+    resp = c.table("foundation_payments_legacy").select("amount_paid,amount_pending").limit(20000).execute()
+    paid = sum(float(r.get("amount_paid") or 0) for r in (resp.data or []))
+    pending = sum(float(r.get("amount_pending") or 0) for r in (resp.data or []))
     return paid, pending, (paid + pending)
 
-def loans_interest_totals(c):
-    resp = c.table("loans_legacy").select(
-        "total_interest_generated,total_interest_accumulated,unpaid_interest,status,total_due"
-    ).limit(10000).execute()
-
-    total_gen = 0.0
-    total_acc = 0.0
-    unpaid = 0.0
+def loans_portfolio_totals(c):
+    # Portfolio view for monthly interest model
+    resp = c.table("loans_legacy").select("status,total_due,balance,accrued_interest").limit(20000).execute()
     active_count = 0
     active_total_due = 0.0
+    active_balance = 0.0
+    active_interest = 0.0
 
     for r in (resp.data or []):
-        total_gen += float(r.get("total_interest_generated") or 0)
-        total_acc += float(r.get("total_interest_accumulated") or 0)
-        unpaid += float(r.get("unpaid_interest") or 0)
-        if str(r.get("status") or "").lower() == "active":
+        if str(r.get("status") or "").lower().strip() == "active":
             active_count += 1
             active_total_due += float(r.get("total_due") or 0)
+            active_balance += float(r.get("balance") or 0)
+            active_interest += float(r.get("accrued_interest") or 0)
 
-    total_interest = total_gen if total_gen > 0 else total_acc
-    return total_interest, unpaid, active_count, active_total_due
+    return active_count, active_total_due, active_balance, active_interest
 
 def fines_totals(c):
-    resp = c.table("fines_legacy").select("amount,status").limit(10000).execute()
+    resp = c.table("fines_legacy").select("amount,status").limit(20000).execute()
     total = 0.0
     unpaid = 0.0
     for r in (resp.data or []):
         amt = float(r.get("amount") or 0)
         total += amt
-        stt = str(r.get("status") or "").lower()
+        stt = str(r.get("status") or "").lower().strip()
         if stt not in ("paid", "cleared", "settled"):
             unpaid += amt
     return total, unpaid
 
-# ============================================================
-# Borrow capacity (use kind='paid')
-# ============================================================
+# Borrow capacity
 def member_available_to_borrow(c, legacy_member_id: int):
-    resp_c = (
-        c.table("contributions_legacy")
-        .select("amount,kind,member_id")
-        .eq("member_id", legacy_member_id)
-        .limit(10000)
-        .execute()
-    )
-    contrib = 0.0
-    for r in (resp_c.data or []):
-        if (r.get("kind") or "").lower().strip() == "paid":
-            contrib += float(r.get("amount") or 0)
+    resp_c = c.table("contributions_legacy").select("amount,kind,member_id").eq("member_id", legacy_member_id).limit(20000).execute()
+    paid_contrib = sum(float(r.get("amount") or 0) for r in (resp_c.data or []) if str(r.get("kind") or "").lower().strip() == "paid")
 
-    resp_f = (
-        c.table("foundation_payments_legacy")
-        .select("amount_paid,amount_pending,member_id")
-        .eq("member_id", legacy_member_id)
-        .limit(10000)
-        .execute()
-    )
-    found = 0.0
-    for r in (resp_f.data or []):
-        found += float(r.get("amount_paid") or 0) + float(r.get("amount_pending") or 0)
+    resp_f = c.table("foundation_payments_legacy").select("amount_paid,amount_pending,member_id").eq("member_id", legacy_member_id).limit(20000).execute()
+    found = sum(float(r.get("amount_paid") or 0) + float(r.get("amount_pending") or 0) for r in (resp_f.data or []))
 
-    return contrib + (found * 0.70), contrib, found
+    available = paid_contrib + (found * 0.70)
+    return available, paid_contrib, found
 
-# ============================================================
-# ✅ FIX: Member Loan Totals (so loans are not 0 per member)
-# ============================================================
-def member_loan_totals(c, legacy_member_id: int):
-    resp = (
-        c.table("loans_legacy")
-        .select("principal_current,unpaid_interest,")
-        .eq("member_id", legacy_member_id)
-        .limit(10000)
-        .execute()
-    )
-
-    principal = 0.0
-    unpaid_interest = 0.0
-    active_loans = 0
-
+def member_loan_totals_monthly(c, legacy_member_id: int):
+    resp = c.table("loans_legacy").select("status,total_due,balance,accrued_interest").eq("member_id", legacy_member_id).limit(20000).execute()
+    active_cnt = 0
+    due_total = 0.0
+    bal_total = 0.0
+    int_total = 0.0
 
     for r in (resp.data or []):
-        if str(r.get("status") or "").lower() == "active":
-            active_loans += 1
-            principal += float(r.get("principal_current") or 0)
-            unpaid_interest += float(r.get("unpaid_interest") or 0)
-            total_due += float(r.get("principal_current") or 0)
+        if str(r.get("status") or "").lower().strip() == "active":
+            active_cnt += 1
+            due_total += float(r.get("total_due") or 0)
+            bal_total += float(r.get("balance") or 0)
+            int_total += float(r.get("accrued_interest") or 0)
 
-    return principal, unpaid_interest, active_loans
+    return active_cnt, due_total, bal_total, int_total
 
 # ============================================================
-# Header (✅ NOW ONLY AFTER LOGIN)
+# Bank Top Bar
 # ============================================================
 st.markdown(
-    """
-<div class="panel">
+    f"""
+<div class="bank-topbar">
   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-    <div>
-      <div style="font-size:1.5rem;font-weight:900;margin:0;">Njangi Dashboard</div>
-      <div style="color:var(--muted);font-weight:650;margin-top:2px;">
-        Legacy tables mode • member_registry • contributions_legacy • foundation_payments_legacy • loans_legacy • fines_legacy
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:42px;height:42px;border-radius:14px;
+                  background: linear-gradient(135deg, rgba(29,78,216,.95), rgba(34,197,94,.55));
+                  display:flex;align-items:center;justify-content:center;
+                  font-weight:950;">
+        N
+      </div>
+      <div>
+        <div class="bank-title">Njangi Bank Dashboard</div>
+        <div class="bank-sub">Accounts • Transactions • Loans • Compliance</div>
       </div>
     </div>
-    <div class="badge badge-accent">v1.0</div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <span class="pill pill-blue">User: {user_email}</span>
+      <span class="pill {'pill-green' if admin_mode else 'pill-warn'}">Mode: {"Admin" if admin_mode else "Member"}</span>
+    </div>
   </div>
 </div>
 """,
@@ -487,7 +480,7 @@ st.markdown(
 st.write("")
 
 # ============================================================
-# KPI Row (Global)
+# Global KPI Row + Admin Interest Button
 # ============================================================
 try:
     state = get_app_state(client) or {}
@@ -498,50 +491,69 @@ try:
     pot = sum_contribution_pot(client)
     total_contrib_all = sum_total_contributions_alltime(client)
     f_paid, f_pending, f_total = foundation_totals(client)
-    total_interest, unpaid_interest, active_loans, active_total_due = loans_interest_totals(client)
+    active_loans, active_total_due, active_balance, active_interest = loans_portfolio_totals(client)
     fines_total, fines_unpaid = fines_totals(client)
 
-    r1 = st.columns(7)
-    with r1[0]:
-        kpi_card("Current Beneficiary", f"{next_idx} — {ben_name}", badge_text="Rotation", badge_kind="accent", sub="From app_state.next_payout_index")
-    with r1[1]:
-        kpi_card("Contribution Pot", money(pot), badge_text="Ready", badge_kind=("green" if pot > 0 else "warn"), sub="Sum where kind='contribution'")
-    with r1[2]:
-        kpi_card("All-time Contributions", money(total_contrib_all), badge_text="History", badge_kind="accent", sub="All rows in contributions_legacy")
-    with r1[3]:
-        kpi_card("Foundation Total", money(f_total), badge_text="Paid+Pending", badge_kind="accent", sub=f"Paid {money(f_paid)} • Pending {money(f_pending)}")
-    with r1[4]:
-        kpi_card("Total Interest", money(total_interest), badge_text="Loans", badge_kind="accent", sub=f"Unpaid {money(unpaid_interest)}")
-    with r1[5]:
-        kpi_card("Active Loans", str(active_loans), badge_text="Due", badge_kind=("warn" if active_total_due > 0 else "green"), sub=f"Active total_due {money(active_total_due)}")
-    with r1[6]:
-        kpi_card("Fines", money(fines_total), badge_text="Unpaid", badge_kind=("warn" if fines_unpaid > 0 else "green"), sub=f"Unpaid {money(fines_unpaid)}")
-
+    c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+    with c1: kpi("Next Beneficiary", f"{next_idx} — {ben_name}", "Rotation index from app_state", pill_text="Rotation", pill_kind="blue")
+    with c2: kpi("Contribution Pot", money(pot), "Sum where kind='contribution'", pill_text="Available", pill_kind=("green" if pot > 0 else "warn"))
+    with c3: kpi("All-time Contributions", money(total_contrib_all), "Historical total", pill_text="Ledger", pill_kind="blue")
+    with c4: kpi("Foundation Total", money(f_total), f"Paid {money(f_paid)} • Pending {money(f_pending)}", pill_text="Capital", pill_kind="blue")
+    with c5: kpi("Active Loans", str(active_loans), f"Due {money(active_total_due)}", pill_text="Exposure", pill_kind=("warn" if active_total_due > 0 else "green"))
+    with c6: kpi("Loan Balance", money(active_balance), f"Accrued interest {money(active_interest)}", pill_text="Monthly 5%", pill_kind="blue")
+    with c7: kpi("Fines", money(fines_total), f"Unpaid {money(fines_unpaid)}", pill_text="Risk", pill_kind=("warn" if fines_unpaid > 0 else "green"))
 except Exception as e:
-    show_api_error(e, "Could not load dashboard KPIs")
+    show_api_error(e, "Could not load KPIs")
 
 st.write("")
-st.markdown("<div class='panel'>Tip: If tables are blank or inserts fail, it’s usually RLS blocking SELECT/INSERT for that role.</div>", unsafe_allow_html=True)
+
+# Admin button to apply monthly interest (calls DB function)
+if admin_mode:
+    colA, colB = st.columns([1, 2])
+    with colA:
+        if st.button("Apply Monthly Interest Now (5%)", use_container_width=True):
+            try:
+                # This calls your SQL function: select public.apply_monthly_interest_simple();
+                res = client.rpc("apply_monthly_interest_simple", {}).execute()
+                # supabase may return scalar in data, handle both patterns
+                applied = 0
+                if isinstance(res.data, int):
+                    applied = res.data
+                elif isinstance(res.data, list) and len(res.data) > 0:
+                    # sometimes returned like [{"apply_monthly_interest_simple": 2}]
+                    applied = list(res.data[0].values())[0]
+                st.success(f"Interest applied to {applied} loan(s).")
+                st.rerun()
+            except Exception as e:
+                show_api_error(e, "Could not apply monthly interest (check function/RLS)")
+    with colB:
+        st.markdown(
+            "<div class='panel'><b>Monthly interest rule:</b> 5% per month from borrow date. "
+            "Interest is applied only when a full month has passed since last_interest_at.</div>",
+            unsafe_allow_html=True,
+        )
+
 st.divider()
 
 # ============================================================
 # Tabs
 # ============================================================
-admin_mode = is_admin(profile)
-
 tab_names_admin = [
+    "Overview (Charts)",
     "Members",
-    "Contributions (Legacy)",
-    "Foundation (Legacy)",
-    "Loans (Legacy)",
-    "Fines (Legacy)",
+    "Transactions (Contributions)",
+    "Foundation",
+    "Loans",
+    "Fines",
     "Payout (Option B)",
-    "Member Borrow Capacity",
+    "Borrow Capacity",
+    "Audit Log",
     "JSON Inserter",
 ]
 tab_names_member = [
+    "Overview (Charts)",
     "Members",
-    "Member Borrow Capacity",
+    "Borrow Capacity",
 ]
 
 tabs = st.tabs(tab_names_admin if admin_mode else tab_names_member)
@@ -550,105 +562,183 @@ def tab_index(name: str) -> int:
     names = tab_names_admin if admin_mode else tab_names_member
     return names.index(name)
 
-# ===================== MEMBERS =====================
+# ============================================================
+# Overview (Charts)
+# ============================================================
+with tabs[tab_index("Overview (Charts)")]:
+    st.subheader("Portfolio Overview")
+    st.caption("Charts use created_at/issued_at timestamps. Apply monthly interest from the top button (admin).")
+
+    # Contributions trend
+    st.markdown("#### Contributions Trend")
+    try:
+        df_contrib = to_df(safe_select_autosort(client, "contributions_legacy", limit=5000))
+    except Exception:
+        df_contrib = pd.DataFrame()
+
+    if not df_contrib.empty and any(c in df_contrib.columns for c in ["created_at", "updated_at"]):
+        ts_col = "created_at" if "created_at" in df_contrib.columns else "updated_at"
+        d = df_contrib.copy()
+        d[ts_col] = pd.to_datetime(d[ts_col], errors="coerce")
+        d = d.dropna(subset=[ts_col])
+        d["day"] = d[ts_col].dt.date
+        d["amount"] = pd.to_numeric(d.get("amount"), errors="coerce").fillna(0)
+        d["kind"] = d.get("kind", "unknown").astype(str)
+        trend = d.groupby(["day", "kind"], as_index=False)["amount"].sum()
+        pivot = trend.pivot(index="day", columns="kind", values="amount").fillna(0)
+        st.line_chart(pivot)
+    else:
+        st.info("No contribution timestamps available (or RLS blocked).")
+
+    # Loans by status + exposure
+    st.markdown("#### Loans by Status (Count) + Exposure (Total Due)")
+    try:
+        df_loans = to_df(safe_select_autosort(client, "loans_legacy", limit=5000))
+    except Exception:
+        df_loans = pd.DataFrame()
+
+    if not df_loans.empty and "status" in df_loans.columns:
+        l = df_loans.copy()
+        l["status"] = l["status"].astype(str).str.lower().str.strip()
+        counts = l["status"].value_counts().sort_index()
+        st.bar_chart(counts)
+
+        if "total_due" in l.columns:
+            l["total_due"] = pd.to_numeric(l["total_due"], errors="coerce").fillna(0)
+            exposure = l.groupby("status")["total_due"].sum().sort_index()
+            st.bar_chart(exposure)
+    else:
+        st.info("No loans/status data available (or RLS blocked).")
+
+    # Fines breakdown
+    st.markdown("#### Fines Breakdown")
+    try:
+        df_fines = to_df(safe_select_autosort(client, "fines_legacy", limit=5000))
+    except Exception:
+        df_fines = pd.DataFrame()
+
+    if not df_fines.empty and "status" in df_fines.columns:
+        f = df_fines.copy()
+        f["amount"] = pd.to_numeric(f.get("amount"), errors="coerce").fillna(0)
+        f["status"] = f["status"].astype(str).str.lower().str.strip()
+        breakdown = f.groupby("status", as_index=True)["amount"].sum().sort_index()
+        st.bar_chart(breakdown)
+    else:
+        st.info("No fines/status data available (or RLS blocked).")
+
+# ============================================================
+# Members
+# ============================================================
 with tabs[tab_index("Members")]:
-    st.subheader("member_registry")
-    st.dataframe(df_registry, use_container_width=True)
+    st.subheader("Members")
+    if df_registry.empty:
+        st.info("No members found (or RLS blocked).")
+    else:
+        df_show = filter_df_ui(df_registry, key_prefix="mem")
+        st.dataframe(df_show, use_container_width=True, hide_index=True)
+        download_csv_button(df_registry, "members.csv", "Download Members CSV")
 
-# ===================== MEMBER BORROW CAPACITY (✅ SHOW MEMBER LOANS TOO) =====================
-with tabs[tab_index("Member Borrow Capacity")]:
-    st.subheader("Borrow capacity (per member - Legacy rule)")
-    st.caption("UPDATED: Contributions counted from contributions_legacy where kind='paid' + shows member loan balance.")
+# ============================================================
+# Borrow Capacity (Member + Admin)
+# ============================================================
+with tabs[tab_index("Borrow Capacity")]:
+    st.subheader("Borrow Capacity (Per Member)")
+    st.caption("Rule: available = paid_contributions(kind='paid') + 0.70 × (foundation paid+pending).")
 
-    pick = st.selectbox("Pick member", member_labels, key="cap_member")
+    pick = st.selectbox("Select member", member_labels, key="cap_member")
     mid = int(label_to_legacy_id.get(pick, 0))
     name = label_to_name.get(pick, "")
 
     try:
         avail, paid_contrib, found = member_available_to_borrow(client, mid)
-        principal, unpaid_int, active_cnt, due_total = member_loan_totals(client, mid)
+        active_cnt, due_total, bal_total, int_total = member_loan_totals_monthly(client, mid)
 
-        top = st.columns(6)
-        with top[0]:
-            kpi_card("Member", f"{mid} — {name}", badge_text="Legacy ID", badge_kind="accent", sub="From member_registry")
-        with top[1]:
-            kpi_card("Paid Contributions", money(paid_contrib), badge_text="Counted", badge_kind="accent", sub="kind='paid'")
-        with top[2]:
-            kpi_card("Foundation", money(found), badge_text="Raw", badge_kind="accent", sub="paid + pending")
-        with top[3]:
-            kpi_card("Available to borrow", money(avail), badge_text="Rule", badge_kind="green", sub="paid + 0.70×foundation")
-        with top[4]:
-            kpi_card("Active Loans", str(active_cnt), badge_text="Loans", badge_kind=("warn" if active_cnt > 0 else "green"), sub="status='active'")
-        with top[5]:
-            kpi_card("Loan Balance", money(due_total), badge_text="Due", badge_kind=("danger" if due_total > 0 else "green"), sub=f"Unpaid interest {money(unpaid_int)}")
-
-        st.caption("Rule: available = paid_contributions + 0.70 × (foundation paid + pending)")
-
+        a, b, c, d, e, f = st.columns(6)
+        with a: kpi("Member", f"{mid} — {name}", "Legacy member id", pill_text="Account", pill_kind="blue")
+        with b: kpi("Paid Contributions", money(paid_contrib), "Counted kind='paid'", pill_text="Eligible", pill_kind="blue")
+        with c: kpi("Foundation", money(found), "paid + pending", pill_text="Capital", pill_kind="blue")
+        with d: kpi("Available to Borrow", money(avail), "paid + 0.70×foundation", pill_text="Limit", pill_kind="green")
+        with e: kpi("Active Loans", str(active_cnt), f"Due {money(due_total)}", pill_text="Exposure", pill_kind=("warn" if active_cnt > 0 else "green"))
+        with f: kpi("Balance + Interest", money(bal_total + int_total), f"Bal {money(bal_total)} + Int {money(int_total)}", pill_text="Monthly", pill_kind="blue")
     except Exception as e:
-        show_api_error(e, f"Could not compute borrow capacity/loans for {mid} — {name}")
+        show_api_error(e, "Could not compute borrow capacity/loans")
 
-# Stop here for members (read-only)
+# Stop here for members
 if not admin_mode:
-    st.info("Member mode: read-only dashboard (no inserts).")
+    st.info("Member mode: read-only access.")
     st.stop()
 
 # ============================================================
-# (KEEP THE REST OF YOUR ADMIN TABS EXACTLY AS YOU ALREADY HAVE)
+# Admin Tabs
 # ============================================================
 
-# ===================== CONTRIBUTIONS (LEGACY) =====================
-with tabs[tab_index("Contributions (Legacy)")]:
-    st.subheader("contributions_legacy")
+# --------------------- Transactions (Contributions) ---------------------
+with tabs[tab_index("Transactions (Contributions)")]:
+    st.subheader("Transactions: Contributions (Legacy)")
+    st.caption("Filter, export, and insert contributions.")
+
     try:
-        st.dataframe(to_df(safe_select_autosort(client, "contributions_legacy", limit=800)), use_container_width=True)
+        df = to_df(safe_select_autosort(client, "contributions_legacy", limit=1500))
+        df_view = filter_df_ui(df, key_prefix="contrib")
+        st.dataframe(df_view, use_container_width=True, hide_index=True)
+        download_csv_button(df, "contributions_legacy.csv", "Download Contributions CSV")
     except Exception as e:
         show_api_error(e, "Could not load contributions_legacy")
 
     st.divider()
-    st.markdown("### Insert Contribution (legacy)")
+    st.markdown("### New Contribution Transaction")
 
     mem_label = st.selectbox("Member", member_labels, key="c_member_label")
     legacy_id = int(label_to_legacy_id.get(mem_label, 0))
-    st.caption(f"member_id (legacy): **{legacy_id}**")
-
     amount = st.number_input("amount (int)", min_value=0, step=500, value=500, key="c_amount")
     kind = st.selectbox("kind", ["contribution", "paid", "other"], index=0, key="c_kind")
     session_id = st.text_input("session_id (uuid optional)", value="", key="c_session_id")
 
-    if st.button("Insert Contribution", use_container_width=True, key="btn_c_insert"):
-        payload = {"member_id": legacy_id, "amount": int(amount), "kind": str(kind)}
+    if st.button("Post Contribution", use_container_width=True):
+        payload = {
+            "member_id": legacy_id,
+            "amount": int(amount),
+            "kind": str(kind),
+            "created_at": now_iso(),   # keep created_at
+            # updated_at NOT needed (DB trigger handles)
+        }
         if session_id.strip():
             payload["session_id"] = session_id.strip()
+
         try:
             client.table("contributions_legacy").insert(payload).execute()
-            st.success("Contribution inserted.")
+            st.success("Contribution posted successfully.")
             st.rerun()
         except Exception as e:
-            show_api_error(e, "Contribution insert failed (RLS or invalid data)")
+            show_api_error(e, "Insert failed (RLS/constraints)")
 
-# ===================== FOUNDATION (LEGACY) =====================
-with tabs[tab_index("Foundation (Legacy)")]:
-    st.subheader("foundation_payments_legacy")
+# --------------------- Foundation ---------------------
+with tabs[tab_index("Foundation")]:
+    st.subheader("Foundation Ledger (Legacy)")
+    st.caption("Filter/export + insert foundation payments.")
+
     try:
-        st.dataframe(to_df(safe_select_autosort(client, "foundation_payments_legacy", limit=800)), use_container_width=True)
+        df = to_df(safe_select_autosort(client, "foundation_payments_legacy", limit=1500))
+        df_view = filter_df_ui(df, key_prefix="found")
+        st.dataframe(df_view, use_container_width=True, hide_index=True)
+        download_csv_button(df, "foundation_payments_legacy.csv", "Download Foundation CSV")
     except Exception as e:
         show_api_error(e, "Could not load foundation_payments_legacy")
 
     st.divider()
-    st.markdown("### Insert Foundation Payment (legacy)")
+    st.markdown("### New Foundation Entry")
 
     mem_label_f = st.selectbox("Member", member_labels, key="f_member_label")
     legacy_id_f = int(label_to_legacy_id.get(mem_label_f, 0))
-    st.caption(f"member_id (legacy): **{legacy_id_f}**")
 
-    amount_paid = st.number_input("amount_paid (numeric)", min_value=0.0, step=500.0, value=500.0, key="f_paid")
-    amount_pending = st.number_input("amount_pending (numeric)", min_value=0.0, step=500.0, value=0.0, key="f_pending")
+    amount_paid = st.number_input("amount_paid", min_value=0.0, step=500.0, value=500.0, key="f_paid")
+    amount_pending = st.number_input("amount_pending", min_value=0.0, step=500.0, value=0.0, key="f_pending")
     status = st.selectbox("status", ["paid", "pending", "converted"], index=0, key="f_status")
     date_paid = st.date_input("date_paid", key="f_date_paid")
     converted_to_loan = st.selectbox("converted_to_loan", [False, True], index=0, key="f_conv")
     notes_f = st.text_input("notes (optional)", value="", key="f_notes")
 
-    if st.button("Insert Foundation Payment", use_container_width=True, key="btn_f_insert"):
+    if st.button("Post Foundation Payment", use_container_width=True):
         payload = {
             "member_id": legacy_id_f,
             "amount_paid": float(amount_paid),
@@ -656,27 +746,33 @@ with tabs[tab_index("Foundation (Legacy)")]:
             "status": str(status),
             "date_paid": f"{date_paid}T00:00:00Z",
             "converted_to_loan": bool(converted_to_loan),
+            "created_at": now_iso(),   # your table now has created_at
         }
         if notes_f.strip():
             payload["notes"] = notes_f.strip()
 
         try:
             client.table("foundation_payments_legacy").insert(payload).execute()
-            st.success("Foundation payment inserted.")
+            st.success("Foundation payment posted successfully.")
             st.rerun()
         except Exception as e:
-            show_api_error(e, "Foundation insert failed (RLS/invalid data/column mismatch)")
+            show_api_error(e, "Insert failed (RLS/constraints)")
 
-# ===================== LOANS (LEGACY) =====================
-with tabs[tab_index("Loans (Legacy)")]:
-    st.subheader("loans_legacy")
+# --------------------- Loans (Monthly 5%) ---------------------
+with tabs[tab_index("Loans")]:
+    st.subheader("Loans Portfolio (Monthly Interest)")
+    st.caption("Monthly interest = 5% per month from issued_at. Admin can apply interest from top button.")
+
     try:
-        st.dataframe(to_df(client.table("loans_legacy").select("*").order("created_at", desc=True).limit(400).execute()), use_container_width=True)
+        df = to_df(safe_select_autosort(client, "loans_legacy", limit=1500))
+        df_view = filter_df_ui(df, key_prefix="loans")
+        st.dataframe(df_view, use_container_width=True, hide_index=True)
+        download_csv_button(df, "loans_legacy.csv", "Download Loans CSV")
     except Exception as e:
         show_api_error(e, "Could not load loans_legacy")
 
     st.divider()
-    st.markdown("### Insert Loan (loans_legacy)")
+    st.markdown("### Issue New Loan (Monthly 5%)")
 
     borrower_label = st.selectbox("Borrower", member_labels, key="loan_borrower_label")
     borrower_member_id = int(label_to_legacy_id.get(borrower_label, 0))
@@ -687,20 +783,19 @@ with tabs[tab_index("Loans (Legacy)")]:
     surety_name = label_to_name.get(surety_label, "")
 
     principal = st.number_input("principal", min_value=500.0, step=500.0, value=500.0, key="loan_principal")
-    interest_cycle_days = st.number_input("interest_cycle_days", min_value=1, value=26, step=1, key="loan_cycle_days")
     status = st.selectbox("status", ["active", "pending", "closed", "paid"], index=0, key="loan_status")
 
-    interest = float(principal) * 0.05
-    total_due = float(principal) + interest
-    st.info(f"Interest (5%): **{money(interest)}** • Total Due: **{money(total_due)}**")
+    # NOTE: for monthly model, we do NOT set interest upfront.
+    st.info("Monthly interest: 5% per month from borrow date. Interest will be added when a full month passes.")
 
+    # capacity check
     try:
         b_avail, b_paid, b_found = member_available_to_borrow(client, borrower_member_id)
         st.markdown(
             f"""
 <div class="panel">
-  <div style="font-weight:900;">Borrower capacity check</div>
-  <div style="color:var(--muted);margin-top:4px;">
+  <div style="font-weight:950;">Capacity Check</div>
+  <div style="color:var(--muted);margin-top:8px;">
     Paid contributions <b>{money(b_paid)}</b> + 70% foundation <b>{money(b_found*0.70)}</b> = <b>{money(b_avail)}</b>
   </div>
 </div>
@@ -708,63 +803,71 @@ with tabs[tab_index("Loans (Legacy)")]:
             unsafe_allow_html=True,
         )
         if principal > b_avail:
-            st.warning("Requested principal is higher than calculated capacity (paid+foundation rule).")
+            st.warning("Requested principal is higher than calculated capacity (paid + 70% foundation).")
     except Exception:
         pass
 
-    if st.button("Insert Loan", use_container_width=True, key="btn_insert_loan"):
-        now_utc = now_iso()
+    if st.button("Issue Loan", use_container_width=True):
+        issued = now_iso()
         payload = {
             "member_id": borrower_member_id,
             "borrower_member_id": borrower_member_id,
             "surety_member_id": surety_member_id,
             "borrower_name": borrower_name,
             "surety_name": surety_name,
+
+            # principal/balance
             "principal": float(principal),
-            "interest": float(interest),
-            "total_due": float(total_due),
-            "principal_current": float(principal),
-            "unpaid_interest": float(interest),
-            "total_interest_generated": float(interest),
-            "total_interest_accumulated": 0.0,
-            "interest_cycle_days": int(interest_cycle_days),
-            "last_interest_at": now_utc,
-            "last_interest_date": now_utc,
-            "issued_at": now_utc,
-            "created_at": now_utc,
+            "balance": float(principal),
+
+            # monthly interest tracking fields (must exist in DB)
+            "interest_rate_monthly": 0.05,
+            "accrued_interest": 0.0,
+            "interest_start_at": issued,
+            "last_interest_at": issued,
+
+            # due starts as principal; interest will accrue monthly via SQL function
+            "total_due": float(principal),
+
+            "issued_at": issued,
+            "created_at": issued,
             "status": str(status),
         }
 
         try:
             client.table("loans_legacy").insert(payload).execute()
-            st.success("Loan inserted successfully.")
+            st.success("Loan issued successfully.")
             st.rerun()
         except Exception as e:
-            show_api_error(e, "Loan insert failed (RLS/constraint/column mismatch)")
+            show_api_error(e, "Loan insert failed (missing columns/RLS/constraints)")
 
-# ===================== FINES (LEGACY) =====================
-with tabs[tab_index("Fines (Legacy)")]:
-    st.subheader("fines_legacy")
+# --------------------- Fines ---------------------
+with tabs[tab_index("Fines")]:
+    st.subheader("Fines Ledger (Legacy)")
+    st.caption("Filter/export + post fines.")
 
     try:
-        st.dataframe(to_df(safe_select_autosort(client, "fines_legacy", limit=800)), use_container_width=True)
+        df = to_df(safe_select_autosort(client, "fines_legacy", limit=1500))
+        df_view = filter_df_ui(df, key_prefix="fines")
+        st.dataframe(df_view, use_container_width=True, hide_index=True)
+        download_csv_button(df, "fines_legacy.csv", "Download Fines CSV")
     except Exception as e:
         show_api_error(e, "Could not load fines_legacy")
 
     st.divider()
-    st.markdown("### Insert Fine (fines_legacy)")
+    st.markdown("### Post Fine")
 
     mem_label_x = st.selectbox("Member", member_labels, key="fine_member_label")
     fine_member_id = int(label_to_legacy_id.get(mem_label_x, 0))
     fine_member_name = label_to_name.get(mem_label_x, "")
 
-    fine_amount = st.number_input("amount (numeric)", min_value=0.0, step=500.0, value=500.0, key="fine_amount")
+    fine_amount = st.number_input("amount", min_value=0.0, step=500.0, value=500.0, key="fine_amount")
     fine_reason = st.text_input("reason", value="Late payment", key="fine_reason")
     fine_status = st.selectbox("status", ["unpaid", "paid"], index=0, key="fine_status")
     fine_paid_at = st.date_input("paid_at (optional)", key="fine_paid_at")
     paid_at_value = None if fine_status == "unpaid" else f"{fine_paid_at}T00:00:00Z"
 
-    if st.button("Insert Fine", use_container_width=True, key="btn_fine_insert"):
+    if st.button("Post Fine", use_container_width=True):
         payload = {
             "member_id": fine_member_id,
             "member_name": fine_member_name,
@@ -772,19 +875,18 @@ with tabs[tab_index("Fines (Legacy)")]:
             "reason": str(fine_reason),
             "status": str(fine_status),
             "created_at": now_iso(),
-            "updated_at": now_iso(),
         }
         if paid_at_value:
             payload["paid_at"] = paid_at_value
 
         try:
             client.table("fines_legacy").insert(payload).execute()
-            st.success("Fine inserted.")
+            st.success("Fine posted successfully.")
             st.rerun()
         except Exception as e:
-            show_api_error(e, "Fine insert failed (RLS/column mismatch)")
+            show_api_error(e, "Insert failed (RLS/constraints)")
 
-# ===================== PAYOUT (OPTION B - LEGACY) =====================
+# --------------------- Payout (Option B) ---------------------
 def legacy_payout_option_b(c):
     st_row = get_app_state(c)
     if not st_row:
@@ -793,7 +895,7 @@ def legacy_payout_option_b(c):
     idx = int(st_row.get("next_payout_index") or 1)
     pot = sum_contribution_pot(c)
     if pot <= 0:
-        raise Exception("Pot is zero (no kind='contribution' rows in contributions_legacy).")
+        raise Exception("Pot is zero (no kind='contribution' rows).")
 
     ben = fetch_one(c.table("member_registry").select("legacy_member_id,full_name").eq("legacy_member_id", idx))
     ben_name = (ben or {}).get("full_name") or f"Member {idx}"
@@ -805,6 +907,7 @@ def legacy_payout_option_b(c):
         "payout_date": str(date.today()),
         "created_at": now_iso(),
     }
+
     payout_inserted = False
     try:
         c.table("payouts_legacy").insert(payout_payload).execute()
@@ -812,18 +915,16 @@ def legacy_payout_option_b(c):
     except Exception:
         payout_inserted = False
 
-    c.table("contributions_legacy").update({"kind": "paid", "updated_at": now_iso()}).eq("kind", "contribution").execute()
+    c.table("contributions_legacy").update({"kind": "paid"}).eq("kind", "contribution").execute()
 
     nxt = idx + 1
     if nxt > 17:
         nxt = 1
-
     next_date = (date.today() + timedelta(days=14)).isoformat()
 
     c.table("app_state").update({
         "next_payout_index": nxt,
         "next_payout_date": next_date,
-        "updated_at": now_iso()
     }).eq("id", 1).execute()
 
     return {
@@ -836,22 +937,8 @@ def legacy_payout_option_b(c):
     }
 
 with tabs[tab_index("Payout (Option B)")]:
-    st.subheader("Payout (Option B - Legacy)")
-
-    st.markdown(
-        """
-<div class="panel">
-  <div style="font-weight:900;">How payout works (Option B)</div>
-  <ul style="margin-top:8px;color:var(--muted);">
-    <li>Beneficiary = <b>app_state.next_payout_index</b> (legacy_member_id)</li>
-    <li>Pot = sum(contributions_legacy.amount) where kind='contribution'</li>
-    <li>Marks pot contributions as kind='paid' (does not delete)</li>
-    <li>Advances next_payout_index (1..17 wrap) and next_payout_date (+14 days)</li>
-  </ul>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+    st.subheader("Payout Processor (Option B)")
+    st.caption("Clears pot (kind='contribution' -> 'paid') and advances rotation.")
 
     try:
         state = get_app_state(client) or {}
@@ -864,35 +951,52 @@ with tabs[tab_index("Payout (Option B)")]:
         colA, colB = st.columns([2, 1])
         with colA:
             st.info(f"Next beneficiary: **{idx} — {ben_name}**")
-            st.info(f"Pot ready to pay: **{money(pot)}**")
-            st.caption(f"Next payout date (from app_state): {next_dt}")
+            st.info(f"Pot ready: **{money(pot)}**")
+            st.caption(f"Next payout date: {next_dt}")
         with colB:
             st.markdown(
-                "<div class='panel'><div style='font-weight:900;'>Safety</div>"
-                "<div style='color:var(--muted);margin-top:6px;'>Run payout once per cycle. It clears the pot.</div></div>",
+                "<div class='panel'><div style='font-weight:950;'>Risk Controls</div>"
+                "<div style='color:var(--muted);margin-top:8px;'>Run once per cycle. Clears pot and advances rotation.</div></div>",
                 unsafe_allow_html=True
             )
     except Exception as e:
         show_api_error(e, "Could not load payout state")
 
-    if st.button("Run Payout Now (Option B)", use_container_width=True):
+    if st.button("Run Payout Now", use_container_width=True):
         try:
-            receipt = legacy_payout_option_b(client)
+            with st.spinner("Executing payout..."):
+                receipt = legacy_payout_option_b(client)
             st.success("Payout completed.")
             st.json(receipt)
-            st.caption("If payouts_legacy insert fails (schema mismatch), payout still clears pot and advances rotation.")
             st.rerun()
         except Exception as e:
             show_api_error(e, "Payout failed")
 
-# ===================== JSON INSERTER =====================
+# --------------------- Audit Log ---------------------
+with tabs[tab_index("Audit Log")]:
+    st.subheader("Audit Log (Admin)")
+    st.caption("Compliance trail. If blank, check RLS on audit_log.")
+
+    try:
+        df_audit = to_df(safe_select_autosort(client, "audit_log", limit=800))
+        if df_audit.empty:
+            st.info("No audit entries found (or RLS blocked).")
+        else:
+            df_view = filter_df_ui(df_audit, key_prefix="audit")
+            st.dataframe(df_view, use_container_width=True, hide_index=True)
+            download_csv_button(df_audit, "audit_log.csv", "Download Audit Log CSV")
+    except Exception as e:
+        show_api_error(e, "Could not load audit_log")
+
+# --------------------- JSON Inserter ---------------------
 with tabs[tab_index("JSON Inserter")]:
     st.subheader("Universal JSON Inserter")
+    st.caption("Admin tool: inserts raw JSON into any table (use carefully).")
 
     table = st.text_input("table", value="contributions_legacy", key="json_table")
     payload_text = st.text_area(
         "payload (json)",
-        value='{"member_id": 1, "amount": 500, "kind": "contribution"}',
+        value='{"member_id": 1, "amount": 500, "kind": "contribution", "created_at": "2026-01-01T00:00:00Z"}',
         height=220,
         key="json_payload",
     )
@@ -900,6 +1004,7 @@ with tabs[tab_index("JSON Inserter")]:
     if st.button("Run Insert", use_container_width=True):
         try:
             payload = json.loads(payload_text)
+            payload.setdefault("created_at", now_iso())
             client.table(table).insert(payload).execute()
             st.success("Insert OK")
         except Exception as e:
